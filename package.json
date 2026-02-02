@@ -1,0 +1,24 @@
+{
+  "name": "laboratory",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lowPrio12/LABORATORY.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/lowPrio12/LABORATORY/issues"
+  },
+  "homepage": "https://github.com/lowPrio12/LABORATORY#readme",
+  "devDependencies": {
+    "electron": "^40.1.0"
+  }
+}
