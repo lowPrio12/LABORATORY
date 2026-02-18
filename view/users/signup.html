@@ -1,11 +1,40 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Document</title>
+    <link rel="stylesheet" href="/assets/style.css">
 </head>
+
 <body>
-    
+    <div class="topbar">
+        <div class="topbar-left">
+            <h1>D-Egg Allocation</h1>
+        </div>
+    </div>
+
+    <div class="content">
+        <h2>Welcome to D-Egg Allocation System</h2>
+        <p>(encouragement text to use our system)</p>
+
+        <div class="login-form">
+            <h2>Sign Up</h2>
+            <form id="loginForm">
+                <input type="text" id="userName" placeholder="Full Name" required>
+                <input type="text" id="userEmail" placeholder="Email" required>
+                <input type="password" id="password" placeholder="Password" required>
+                <input type="password" id="confPassword" placeholder="Confirm Password" required>
+
+                <button type="submit">Sign Up</button>
+            </form>
+            <div id="signupMessage"></div>
+        </div>
+        <a href="/index.html" style="color: #007BFF; text-decoration: none; transition: color 0.3s;">
+            Already have an account? Sign In
+        </a>
+    </div>
 </body>
+
 </html>
