@@ -16,7 +16,7 @@ CREATE TABLE
     user_id INT NOT NULL,
     total_egg INT NOT NULL,
     status ENUM ('incubating', 'hatched', 'failed') NOT NULL,
-    date_started_incubation DATE NOT NULL,
+    date_started_incubation TIMESTAMP NOT NULL,
     balut_count INT DEFAULT 0,
     failed_count INT DEFAULT 0,
     chick_count INT DEFAULT 0,
