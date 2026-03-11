@@ -12,6 +12,38 @@ $stmt = $conn->prepare("INSERT INTO user_activity_logs (user_id, action) VALUES 
 $stmt->execute([$_SESSION['user_id'], $action]);
 
 // ---------------------------
+// Add New User
+// ---------------------------
+$add_user_error = ""; // Error message
+
+if (isset($_POST['add_user'])) {
+    $username = trim($_POST['username']);
+    $password = $_POST['password'];
+    $role = $_POST['role'];
+
+    // Check if username already exists
+    $stmt = $conn->prepare("SELECT COUNT(*) FROM users WHERE username = ?");
+    $stmt->execute([$username]);
+    $exists = $stmt->fetchColumn();
+
+    if ($exists) {
+        $add_user_error = "Username '$username' already exists. Choose a different username.";
+    } else {
+        // Insert new user
+        $hashed_password = password_hash($password, PASSWORD_DEFAULT);
+        $stmt = $conn->prepare("INSERT INTO users (username, password, user_role) VALUES (?, ?, ?)");
+        $stmt->execute([$username, $hashed_password, $role]);
+
+        $action = "Admin created new user '$username' with role '$role'";
+        $stmt = $conn->prepare("INSERT INTO user_activity_logs (user_id, action) VALUES (?, ?)");
+        $stmt->execute([$_SESSION['user_id'], $action]);
+
+        header("Location: dashboard.php");
+        exit;
+    }
+}
+
+// ---------------------------
 // Update username
 // ---------------------------
 if (isset($_POST['update_user'])) {
@@ -39,14 +71,14 @@ if (isset($_POST['update_user'])) {
 // ---------------------------
 if (isset($_POST['delete_user'])) {
     $user_id_to_delete = $_POST['user_id'];
-    $stmt = $conn->prepare("SELECT username FROM users WHERE user_id=?");
+    $stmt = $conn->prepare("SELECT username, user_role FROM users WHERE user_id=?");
     $stmt->execute([$user_id_to_delete]);
     $user_info = $stmt->fetch(PDO::FETCH_ASSOC);
 
-    $stmt = $conn->prepare("DELETE FROM users WHERE user_id=? AND user_role!='admin'");
-    $stmt->execute([$user_id_to_delete]);
+    if ($user_info && $user_info['user_role'] !== 'admin') {
+        $stmt = $conn->prepare("DELETE FROM users WHERE user_id=?");
+        $stmt->execute([$user_id_to_delete]);
 
-    if ($user_info) {
         $action = "Admin deleted user '{$user_info['username']}' (ID: $user_id_to_delete)";
         $stmt = $conn->prepare("INSERT INTO user_activity_logs (user_id, action) VALUES (?, ?)");
         $stmt->execute([$_SESSION['user_id'], $action]);
@@ -79,7 +111,7 @@ if (isset($_POST['delete_batch'])) {
 // ---------------------------
 // Dashboard summary
 // ---------------------------
-$stmt = $conn->query("SELECT COUNT(*) FROM users WHERE user_role='user'");
+$stmt = $conn->query("SELECT COUNT(*) FROM users");
 $total_users = $stmt->fetchColumn();
 
 $stmt = $conn->query("SELECT COUNT(*) FROM egg");
@@ -91,8 +123,8 @@ $total_eggs = $stmt->fetchColumn();
 $stmt = $conn->query("SELECT SUM(chick_count) FROM egg");
 $total_chicks = $stmt->fetchColumn();
 
-// Fetch users
-$stmt = $conn->query("SELECT * FROM users WHERE user_role='user' ORDER BY created_at DESC");
+// Fetch users including admin, sorted by user_id ascending
+$stmt = $conn->query("SELECT * FROM users ORDER BY user_id ASC");
 $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Fetch egg batches
@@ -131,6 +163,7 @@ $logs = $stmt->fetchAll(PDO::FETCH_ASSOC);
             <h2>Egg System Admin</h2>
             <ul>
                 <li class="active">Dashboard</li>
+                <li><button onclick="openAddUserModal()">Create User</button></li>
                 <li><a href="../../controller/auth/signout.php">Logout</a></li>
             </ul>
         </aside>
@@ -169,6 +202,7 @@ $logs = $stmt->fetchAll(PDO::FETCH_ASSOC);
                     <tr>
                         <th>ID</th>
                         <th>Username</th>
+                        <th>Role</th>
                         <th>Created</th>
                         <th>Action</th>
                     </tr>
@@ -176,18 +210,21 @@ $logs = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 <tbody>
                     <?php foreach ($users as $user): ?>
                         <tr>
-                            <td><?= $user['user_id'] ?></td>
-                            <td><?= $user['username'] ?></td>
-                            <td><?= date("M d, Y", strtotime($user['created_at'])) ?></td>
+                            <td><?= $user['user_id'] ?></td> <!-- Display by ID -->
+                            <td><?= htmlspecialchars($user['username']) ?></td>
+                            <td><?= $user['user_role'] ?></td>
+                            <td><?= date("M d, Y H:i:s", strtotime($user['created_at'])) ?></td> <!-- Include time -->
                             <td>
                                 <!-- Edit Username -->
-                                <button onclick="openEditModal(<?= $user['user_id'] ?>, '<?= $user['username'] ?>')">Edit</button>
+                                <button onclick="openEditModal(<?= $user['user_id'] ?>, '<?= htmlspecialchars($user['username']) ?>')">Edit</button>
 
-                                <!-- Delete -->
-                                <form method="post" style="display:inline;" onsubmit="return confirm('Delete this user?');">
-                                    <input type="hidden" name="user_id" value="<?= $user['user_id'] ?>">
-                                    <button class="btn-delete" type="submit" name="delete_user">Delete</button>
-                                </form>
+                                <!-- Delete (only if not admin) -->
+                                <?php if ($user['user_role'] !== 'admin'): ?>
+                                    <form method="post" style="display:inline;" onsubmit="return confirm('Delete this user?');">
+                                        <input type="hidden" name="user_id" value="<?= $user['user_id'] ?>">
+                                        <button class="btn-delete" type="submit" name="delete_user">Delete</button>
+                                    </form>
+                                <?php endif; ?>
                             </td>
                         </tr>
                     <?php endforeach; ?>
@@ -252,9 +289,10 @@ $logs = $stmt->fetchAll(PDO::FETCH_ASSOC);
                     <?php endforeach; ?>
                 </tbody>
             </table>
-
         </main>
     </div>
+
+    <!-- Modals -->
 
     <!-- Edit Username Modal -->
     <div class="modal" id="editModal">
@@ -272,6 +310,56 @@ $logs = $stmt->fetchAll(PDO::FETCH_ASSOC);
         </div>
     </div>
 
+    <!-- Add User Modal -->
+    <div class="modal" id="addUserModal">
+        <div class="modal-content">
+            <h3>Create New User</h3>
+            <form method="post">
+                <label>Username</label>
+                <input type="text" name="username" required>
+                <label>Password</label>
+                <input type="password" name="password" required>
+                <label>Role</label>
+                <select name="role" required>
+                    <option value="user">User</option>
+                    <option value="manager">Manager</option>
+                    <option value="admin">Admin</option>
+                </select>
+                <div class="modal-actions">
+                    <button class="btn-primary" type="submit" name="add_user">Create</button>
+                    <button class="btn-secondary" type="button" onclick="closeAddUserModal()">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Add User Modal -->
+    <div class="modal" id="addUserModal">
+        <div class="modal-content">
+            <h3>Create New User</h3>
+            <?php if ($add_user_error): ?>
+                <p style="color:red; font-weight:bold;"><?= $add_user_error ?></p>
+            <?php endif; ?>
+            <form method="post">
+                <label>Username</label>
+                <input type="text" name="username" required>
+                <label>Password</label>
+                <input type="password" name="password" required>
+                <label>Role</label>
+                <select name="role" required>
+                    <option value="user">User</option>
+                    <option value="manager">Manager</option>
+                    <option value="admin">Admin</option>
+                </select>
+                <div class="modal-actions">
+                    <button class="btn-primary" type="submit" name="add_user">Create</button>
+                    <button class="btn-secondary" type="button" onclick="closeAddUserModal()">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- functions here-->
     <script>
         function openEditModal(id, username) {
             document.getElementById('edit_user_id').value = id;
@@ -281,6 +369,14 @@ $logs = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         function closeEditModal() {
             document.getElementById('editModal').classList.remove('active');
+        }
+
+        function openAddUserModal() {
+            document.getElementById('addUserModal').classList.add('active');
+        }
+
+        function closeAddUserModal() {
+            document.getElementById('addUserModal').classList.remove('active');
         }
     </script>
 
