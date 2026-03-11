@@ -117,7 +117,7 @@ $logs = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
             <ul>
                 <li class="active">Dashboard</li>
-                <li><a href="../../logout.php">Logout</a></li>
+                <li><a href="../../controller/auth/signout.php">Logout</a></li>
             </ul>
         </aside>
 
