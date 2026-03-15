@@ -268,7 +268,8 @@ $roles = ['admin', 'manager', 'user'];
                                 </td>
                                 <td>
                                     <div class="action-buttons">
-                                        <button class="btn-icon edit" onclick="openEditModal('<?= $user['user_id'] ?>', '<?= $user['username'] ?>', '<?= $user['user_role'] ?>')" title="Edit user">
+                                        <!-- Replace the existing edit button with this -->
+                                        <button class="btn-icon edit" onclick="openEditModal('<?= $user['user_id'] ?>', '<?= htmlspecialchars($user['username'], ENT_QUOTES) ?>', '<?= $user['user_role'] ?>')" title="Edit user">
                                             <i class="fas fa-edit"></i>
                                         </button>
                                         <button class="btn-icon view" onclick="viewUserDetails('<?= $user['user_id'] ?>')" title="View details">
@@ -372,20 +373,45 @@ $roles = ['admin', 'manager', 'user'];
                     <i class="fas fa-user-edit" style="color: #10b981;"></i>
                     Edit User
                 </h2>
-                <button class="modal-close" onclick="closeEditModal()">
+                <button type="button" class="modal-close" onclick="closeEditModal()">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
             <div class="modal-body">
-                <form id="editForm" method="POST" action="../../controller/users/user-update.php">
-                    <input type="hidden" name="user_id" id="edit_user_id">
+                <form id="editUserForm" onsubmit="updateUser(event)">
+                    <input type="hidden" id="edit_user_id" name="user_id">
 
                     <div class="form-group">
                         <label for="edit_username">
                             <i class="fas fa-user"></i>
                             Username
                         </label>
-                        <input type="text" id="edit_username" name="username" required>
+                        <input
+                            type="text"
+                            id="edit_username"
+                            name="username"
+                            required
+                            minlength="3"
+                            maxlength="50"
+                            pattern="[a-zA-Z0-9_]+"
+                            title="Username can only contain letters, numbers, and underscores"
+                            placeholder="Enter username">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="edit_password">
+                            <i class="fas fa-lock"></i>
+                            New Password (leave blank to keep current)
+                        </label>
+                        <input
+                            type="password"
+                            id="edit_password"
+                            name="password"
+                            minlength="6"
+                            placeholder="Enter new password">
+                        <small style="color: #64748b; font-size: 0.75rem; margin-top: 0.25rem; display: block;">
+                            Leave blank to keep current password. Minimum 6 characters if changing.
+                        </small>
                     </div>
 
                     <div class="form-group">
@@ -400,27 +426,22 @@ $roles = ['admin', 'manager', 'user'];
                         </select>
                     </div>
 
-                    <div class="form-group">
-                        <label for="edit_password">
-                            <i class="fas fa-lock"></i>
-                            New Password (leave blank to keep current)
-                        </label>
-                        <input type="password" id="edit_password" name="password">
-                    </div>
-
                     <div class="form-actions">
                         <button type="button" class="btn btn-outline" onclick="closeEditModal()">
+                            <i class="fas fa-times"></i>
                             Cancel
                         </button>
                         <button type="submit" class="btn btn-primary">
                             <i class="fas fa-save"></i>
-                            Save Changes
+                            Update User
                         </button>
                     </div>
                 </form>
             </div>
         </div>
     </div>
+
+    <script src="../../assets/users/js/user-update.js"></script>
 
     <!-- Add User Modal - Only for user creation -->
     <div id="addModal" class="modal">
