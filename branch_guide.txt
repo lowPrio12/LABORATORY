@@ -1,0 +1,19 @@
+main – production-ready code
+
+develop – integration branch for development
+
+feature/<feature-name> – adding a new feature
+
+fix/<bug-name> – fixing a bug
+
+hotfix/<issue-name> – urgent fix for production
+
+refactor/<description> – improving code structure
+
+docs/<description> – documentation updates
+
+test/<description> – testing or experimentation
+
+release/<version> – preparing a new release version
+
+chore/<task> – maintenance tasks (dependencies, configs)
