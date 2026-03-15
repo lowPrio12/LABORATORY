@@ -152,7 +152,7 @@ $logs = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 <head>
     <title>Admin Dashboard</title>
-    <link rel="stylesheet" href="../../assets/admin_style.css">
+    <link rel="stylesheet" href="../../assets/css/admin_style.css">
 </head>
 
 <body>

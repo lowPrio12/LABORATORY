@@ -104,7 +104,7 @@ $logs = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 <head>
     <title>User Dashboard</title>
-    <link rel="stylesheet" href="../../assets/user_style.css">
+    <link rel="stylesheet" href="../../assets/css/user_style.css">
 </head>
 
 <body>
