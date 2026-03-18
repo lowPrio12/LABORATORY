@@ -11,6 +11,7 @@ $user_id = $_SESSION['user_id'];
 
 // Initialize variables
 $incubating = 0;
+$complete = 0;
 $chicks = 0;
 $batches_count = 0;
 $success_rate = 0;
@@ -162,20 +163,10 @@ if (isset($_POST['update_daily'])) {
                     $new_total_processed = $total_processed + $total_input;
 
                     if ($new_total_processed >= $egg['total_egg']) {
-                        // Check if any chicks hatched
-                        $new_chick_count = $egg['chick_count'] + $chick_count;
-
-                        if ($new_chick_count > 0) {
-                            // Update status to hatched if at least one chick hatched
-                            $status_stmt = $conn->prepare("UPDATE egg SET status = 'hatched' WHERE egg_id = ?");
-                            $status_stmt->execute([$egg_id]);
-                            $status_message = " Batch completed with hatched chicks!";
-                        } else {
-                            // If no chicks hatched, mark as failed
-                            $status_stmt = $conn->prepare("UPDATE egg SET status = 'failed' WHERE egg_id = ?");
-                            $status_stmt->execute([$egg_id]);
-                            $status_message = " Batch completed but no chicks hatched.";
-                        }
+                        // Update status to complete
+                        $status_stmt = $conn->prepare("UPDATE egg SET status = 'complete' WHERE egg_id = ?");
+                        $status_stmt->execute([$egg_id]);
+                        $status_message = " Batch completed!";
                     } else {
                         $status_message = "";
                     }
@@ -213,8 +204,7 @@ try {
 
 // Calculate statistics
 $incubating = 0;
-$hatched = 0;
-$failed = 0;
+$complete = 0;
 $chicks = 0;
 $total_eggs = 0;
 $processed_eggs = 0;
@@ -222,10 +212,8 @@ $processed_eggs = 0;
 foreach ($batches as $batch) {
     if ($batch['status'] == 'incubating') {
         $incubating++;
-    } elseif ($batch['status'] == 'hatched') {
-        $hatched++;
-    } elseif ($batch['status'] == 'failed') {
-        $failed++;
+    } elseif ($batch['status'] == 'complete') {
+        $complete++;
     }
 
     $chicks += $batch['chick_count'];
@@ -582,14 +570,9 @@ foreach ($batches as $batch) {
             color: #856404;
         }
 
-        .status-hatched {
+        .status-complete {
             background: #d4edda;
             color: #155724;
-        }
-
-        .status-failed {
-            background: #f8d7da;
-            color: #721c24;
         }
 
         .action-buttons {
@@ -872,21 +855,11 @@ foreach ($batches as $batch) {
 
             <div class="stat-card">
                 <div class="stat-info">
-                    <h3>Hatched Batches</h3>
-                    <p><?= number_format($hatched) ?></p>
+                    <h3>Completed Batches</h3>
+                    <p><?= number_format($complete) ?></p>
                 </div>
                 <div class="stat-icon">
                     <i class="fas fa-check-circle"></i>
-                </div>
-            </div>
-
-            <div class="stat-card">
-                <div class="stat-info">
-                    <h3>Failed Batches</h3>
-                    <p><?= number_format($failed) ?></p>
-                </div>
-                <div class="stat-icon">
-                    <i class="fas fa-times-circle"></i>
                 </div>
             </div>
 
