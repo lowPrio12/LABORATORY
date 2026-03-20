@@ -79,7 +79,7 @@ if (isset($_POST['distribute_profits'])) {
             </div>
             <ul class="sidebar-menu">
                 <li class="active"><a href="dashboard.php"><i class="fas fa-tachometer-alt"></i> Dashboard</a></li>
-                <li><a href="../users/dashboard.php"><i class="fas fa-users"></i> Users</a></li>
+                <li><a href="../users/dashboard.php class="fas fa-users"></i> User Management</a></li>
                 <li><a href="reports.php"><i class="fas fa-chart-bar"></i> Reports</a></li>
                 <li><a href="../../controller/auth/signout.php"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
             </ul>
