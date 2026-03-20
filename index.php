@@ -21,7 +21,7 @@
         <h2>Log in</h2>
 
         <?php
-        // preserve original PHP logic entirely 
+        // Keep your existing code, just update the redirect part
         require 'model/config.php';   // your config path
 
         $error = '';
@@ -37,14 +37,19 @@
             if ($user && password_verify($password, $user['password'])) {
                 $_SESSION['user_id'] = $user['user_id'];
                 $_SESSION['user_role'] = $user['user_role'];
+                $_SESSION['user_name'] = $user['username'];
 
-                // Redirect based on role
+                // Redirect based on role - FIXED to include manager
                 if ($user['user_role'] === 'admin') {
                     header("Location: view/admin/dashboard.php");
+                    exit;
+                } elseif ($user['user_role'] === 'manager') {
+                    header("Location: view/manager/dashboard.php");
+                    exit;
                 } else {
                     header("Location: view/user/dashboard.php");
+                    exit;
                 }
-                exit;
             } else {
                 $error = "Invalid username or password!";
             }
