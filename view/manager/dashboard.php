@@ -9,9 +9,32 @@ if (!isset($_SESSION['user_id']) || $_SESSION['user_role'] !== 'manager') {
 
 $manager_id = $_SESSION['user_id'];
 
-// Log access
+// Helper function to format time ago
+function timeAgo($datetime) {
+    if (!$datetime) return 'Never';
+    
+    $now = new DateTime();
+    $ago = new DateTime($datetime);
+    $diff = $now->diff($ago);
+    
+    if ($diff->y > 0) {
+        return $diff->y . ' year' . ($diff->y > 1 ? 's' : '') . ' ago';
+    } elseif ($diff->m > 0) {
+        return $diff->m . ' month' . ($diff->m > 1 ? 's' : '') . ' ago';
+    } elseif ($diff->d > 0) {
+        return $diff->d . ' day' . ($diff->d > 1 ? 's' : '') . ' ago';
+    } elseif ($diff->h > 0) {
+        return $diff->h . ' hour' . ($diff->h > 1 ? 's' : '') . ' ago';
+    } elseif ($diff->i > 0) {
+        return $diff->i . ' minute' . ($diff->i > 1 ? 's' : '') . ' ago';
+    } else {
+        return 'Just now';
+    }
+}
+
+// Log access with proper timestamp
 $action = "Manager accessed dashboard";
-$stmt = $conn->prepare("INSERT INTO user_activity_logs (user_id, action) VALUES (?, ?)");
+$stmt = $conn->prepare("INSERT INTO user_activity_logs (user_id, action, log_date) VALUES (?, ?, NOW())");
 $stmt->execute([$manager_id, $action]);
 
 // Fetch statistics
@@ -35,25 +58,23 @@ $stmt = $conn->prepare("
 $stmt->execute();
 $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// Fetch recent activity logs (all users)
+// Fetch recent activity logs with proper date handling
 $stmt = $conn->prepare("
     SELECT l.*, u.username 
     FROM user_activity_logs l
     JOIN users u ON l.user_id = u.user_id
+    WHERE l.log_date IS NOT NULL
     ORDER BY l.log_date DESC
     LIMIT 20
 ");
 $stmt->execute();
 $logs = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// Handle profit distribution (simulate distribution)
+// Handle profit distribution
 $distribution_message = null;
 if (isset($_POST['distribute_profits'])) {
-    // In a real system, you would calculate profits based on balut count
-    // and distribute to users (e.g., update a user_balance table).
-    // For demonstration, we'll just log the distribution.
     $action = "Distributed profits based on balut counts";
-    $stmt = $conn->prepare("INSERT INTO user_activity_logs (user_id, action) VALUES (?, ?)");
+    $stmt = $conn->prepare("INSERT INTO user_activity_logs (user_id, action, log_date) VALUES (?, ?, NOW())");
     $stmt->execute([$manager_id, $action]);
     $distribution_message = "Profits distributed successfully!";
 }
@@ -79,7 +100,7 @@ if (isset($_POST['distribute_profits'])) {
             </div>
             <ul class="sidebar-menu">
                 <li class="active"><a href="dashboard.php"><i class="fas fa-tachometer-alt"></i> Dashboard</a></li>
-                <li><a href="../users/dashboard.php class="fas fa-users"></i> User Management</a></li>
+                <li><a href="../users/dashboard.php"><i class="fas fa-users"></i> User Management</a></li>
                 <li><a href="reports.php"><i class="fas fa-chart-bar"></i> Reports</a></li>
                 <li><a href="../../controller/auth/signout.php"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
             </ul>
@@ -163,18 +184,18 @@ if (isset($_POST['distribute_profits'])) {
                 </div>
                 <table class="data-table">
                     <thead>
-                        <tr>
+                         <tr>
                             <th>User</th>
                             <th>Role</th>
                             <th>Joined</th>
                             <th>Batches</th>
                             <th>Total Balut</th>
                             <th>Total Chicks</th>
-                        </tr>
+                         </tr>
                     </thead>
                     <tbody>
                         <?php foreach ($users as $user): ?>
-                        <tr>
+                         <tr>
                             <td>
                                 <div class="user-info">
                                     <div class="avatar"><?= strtoupper(substr($user['username'], 0, 1)) ?></div>
@@ -186,33 +207,48 @@ if (isset($_POST['distribute_profits'])) {
                             <td><?= number_format($user['batch_count']) ?></td>
                             <td><strong><?= number_format($user['total_balut']) ?></strong></td>
                             <td><?= number_format($user['total_chicks']) ?></td>
-                        </tr>
+                         </tr>
                         <?php endforeach; ?>
                     </tbody>
                 </table>
             </div>
 
-            <!-- Recent Activity Logs -->
+            <!-- Recent Activity Logs - Fixed Time Display -->
             <div class="table-container">
                 <div class="table-header">
                     <h3>Recent User Activity</h3>
                 </div>
                 <table class="data-table">
                     <thead>
-                        <tr>
+                         <tr>
                             <th>Time</th>
                             <th>User</th>
                             <th>Action</th>
-                        </tr>
+                         </tr>
                     </thead>
                     <tbody>
-                        <?php foreach ($logs as $log): ?>
-                        <tr>
-                            <td class="activity-time"><?= date('M d, H:i', strtotime($log['log_date'])) ?></td>
-                            <td><?= htmlspecialchars($log['username']) ?></td>
-                            <td><?= htmlspecialchars($log['action']) ?></td>
-                        </tr>
-                        <?php endforeach; ?>
+                        <?php if (count($logs) > 0): ?>
+                            <?php foreach ($logs as $log): ?>
+                             <tr>
+                                <td class="activity-time">
+                                    <?php 
+                                    // Format the time properly
+                                    if (isset($log['log_date']) && $log['log_date']) {
+                                        echo timeAgo($log['log_date']);
+                                    } else {
+                                        echo 'Unknown';
+                                    }
+                                    ?>
+                                </td>
+                                <td><?= htmlspecialchars($log['username']) ?></td>
+                                <td><?= htmlspecialchars($log['action']) ?></td>
+                             </tr>
+                            <?php endforeach; ?>
+                        <?php else: ?>
+                            <tr>
+                                <td colspan="3" style="text-align: center;">No activity logs found</td>
+                            </tr>
+                        <?php endif; ?>
                     </tbody>
                 </table>
             </div>
@@ -236,7 +272,6 @@ if (isset($_POST['distribute_profits'])) {
                         <label>Password</label>
                         <input type="password" id="password" name="password" required minlength="6">
                     </div>
-                    <!-- Role is fixed to 'user' for manager -->
                     <input type="hidden" name="user_role" value="user">
                 </div>
                 <div class="modal-footer">
@@ -249,7 +284,6 @@ if (isset($_POST['distribute_profits'])) {
 
     <script src="../../assets/manager/js/manager_dashboard.js"></script>
     <script>
-        // Pass PHP data to JS if needed
         const managerData = {
             currentUserId: <?= $_SESSION['user_id'] ?>
         };
