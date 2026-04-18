@@ -226,17 +226,31 @@ foreach ($batches as $b) {
     $chk->execute([$b['egg_id'], $day]);
     $today_logged_map[$b['egg_id']] = (bool)$chk->fetch();
 }
+
+// Pass PHP variables to JavaScript
+$js_vars = [
+    'totalBalut' => (int)$stat_balut,
+    'totalChicks' => (int)$stat_chicks,
+    'totalFailed' => (int)$stat_failed,
+    'incubating' => (int)$stat_incubating,
+    'complete' => (int)$stat_complete,
+    'dailyAnalytics' => $daily_analytics,
+    'batchRemaining' => $batch_remaining,
+    'BALUT_UNLOCK' => BALUT_UNLOCK_DAY,
+    'CHICK_UNLOCK' => CHICK_UNLOCK_DAY,
+];
 ?>
 <!DOCTYPE html>
 <html lang="en">
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>My Dashboard | EggFlow</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="../../assets/user/js/css/user_style.css">
+    <link rel="stylesheet" href="../../assets/user/js/css/dashboard_responsive.css">
 </head>
 
 <body>
@@ -369,719 +383,569 @@ foreach ($batches as $b) {
                             <p>No active batches. <a href="#" onclick="switchTab('batches')">Add your first batch →</a></p>
                         </div>
                     <?php else: ?>
+                        <div class="table-wrapper">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Batch #</th>
+                                        <th>Total Eggs</th>
+                                        <th>Day</th>
+                                        <th>Progress</th>
+                                        <th>Remaining</th>
+                                        <th>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($active as $b):
+                                        $day  = $b['current_day'];
+                                        $proc = $b['failed_count'] + $b['balut_count'] + $b['chick_count'];
+                                        $rem  = $b['total_egg'] - $proc;
+                                        $pct  = $b['total_egg'] > 0 ? round(($proc / $b['total_egg']) * 100) : 0;
+                                        $locked = $day < BALUT_UNLOCK_DAY;
+                                        $logged = isset($today_logged_map[$b['egg_id']]) ? $today_logged_map[$b['egg_id']] : false;
+                                    ?>
+                                        <tr>
+                                            <td data-label="Batch #"><strong>#<?= $b['batch_number'] ?></strong></td>
+                                            <td data-label="Total Eggs"><?= number_format($b['total_egg']) ?></td>
+                                            <td data-label="Day"><span class="day-badge <?= $locked ? 'day-early' : ($day >= CHICK_UNLOCK_DAY ? 'day-late' : 'day-mid') ?>">Day <?= $day ?></span></td>
+                                            <td data-label="Progress">
+                                                <div class="mini-progress">
+                                                    <div class="mini-bar" style="width:<?= $pct ?>%"></div>
+                                                </div>
+                                                <small><?= $pct ?>%</small>
+                                            </td>
+                                            <td data-label="Remaining"><?= number_format($rem) ?></td>
+                                            <td data-label="Action">
+                                                <?php if ($logged): ?>
+                                                    <span class="badge-done"><i class="fas fa-check"></i> Updated</span>
+                                                <?php elseif ($rem > 0): ?>
+                                                    <button class="btn btn-success btn-sm" onclick="openUpdateModal(<?= $b['egg_id'] ?>, <?= $day ?>, <?= $rem ?>, <?= $locked ? 'true' : 'false' ?>)">
+                                                        <i class="fas fa-edit"></i> Update
+                                                    </button>
+                                                <?php else: ?>
+                                                    <span class="badge-done">Complete</span>
+                                                <?php endif; ?>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    <?php endif; ?>
+                </div>
+
+                <?php if (!empty($logs)): ?>
+                    <div class="table-container">
+                        <div class="table-header">
+                            <h3>Recent Activity</h3>
+                        </div>
+                        <div class="table-wrapper">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Time</th>
+                                        <th>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach (array_slice($logs, 0, 8) as $log): ?>
+                                        <tr>
+                                            <td data-label="Time" class="activity-time"><?= date('M d, H:i', strtotime($log['log_date'])) ?></td>
+                                            <td data-label="Action"><?= htmlspecialchars($log['action']) ?></td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                <?php endif; ?>
+            </div>
+
+            <!-- =================== BATCHES TAB =================== -->
+            <div id="batches-section" class="tab-section">
+                <div class="action-bar">
+                    <button class="btn btn-primary" onclick="openAddModal()">
+                        <i class="fas fa-plus-circle"></i> Add New Batch
+                    </button>
+                </div>
+
+                <div class="table-container">
+                    <div class="table-header">
+                        <h3>All Batches</h3>
+                    </div>
+                    <?php if (empty($batches)): ?>
+                        <div class="empty-state">
+                            <i class="fas fa-box-open"></i>
+                            <p>No batches yet. Click "Add New Batch" to get started!</p>
+                        </div>
+                    <?php else: ?>
+                        <div class="table-wrapper">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Batch #</th>
+                                        <th>Total</th>
+                                        <th>Status</th>
+                                        <th>Started</th>
+                                        <th>Day</th>
+                                        <th>Balut</th>
+                                        <th>Chicks</th>
+                                        <th>Failed</th>
+                                        <th>Remaining</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($batches as $b):
+                                        $day    = $b['current_day'];
+                                        $proc   = $b['failed_count'] + $b['balut_count'] + $b['chick_count'];
+                                        $rem    = $b['total_egg'] - $proc;
+                                        $locked = $day < BALUT_UNLOCK_DAY;
+                                        $logged = isset($today_logged_map[$b['egg_id']]) ? $today_logged_map[$b['egg_id']] : false;
+                                    ?>
+                                        <tr>
+                                            <td data-label="Batch #"><strong>#<?= $b['batch_number'] ?></strong></td>
+                                            <td data-label="Total"><?= number_format($b['total_egg']) ?></td>
+                                            <td data-label="Status"><span class="status-badge status-<?= $b['status'] ?>"><?= ucfirst($b['status']) ?></span></td>
+                                            <td data-label="Started"><?= date('M d, Y', strtotime($b['date_started_incubation'])) ?></td>
+                                            <td data-label="Day"><span class="day-badge <?= $locked ? 'day-early' : ($day >= CHICK_UNLOCK_DAY ? 'day-late' : 'day-mid') ?>">Day <?= $day ?></span></td>
+                                            <td data-label="Balut"><?= number_format($b['balut_count']) ?></td>
+                                            <td data-label="Chicks"><?= number_format($b['chick_count']) ?></td>
+                                            <td data-label="Failed"><?= number_format($b['failed_count']) ?></td>
+                                            <td data-label="Remaining"><strong><?= number_format($rem) ?></strong></td>
+                                            <td data-label="Actions">
+                                                <div class="action-btns">
+                                                    <?php if ($b['status'] === 'incubating' && $rem > 0 && !$logged): ?>
+                                                        <button class="btn btn-warning btn-sm" onclick="openUpdateModal(<?= $b['egg_id'] ?>, <?= $day ?>, <?= $rem ?>, <?= $locked ? 'true' : 'false' ?>)">
+                                                            <i class="fas fa-edit"></i> Update
+                                                        </button>
+                                                    <?php elseif ($logged && $b['status'] === 'incubating'): ?>
+                                                        <span class="badge-done"><i class="fas fa-check"></i> Done today</span>
+                                                    <?php endif; ?>
+                                                    <form method="post" style="display:inline;" onsubmit="return confirm('Delete this batch? Cannot be undone.')">
+                                                        <input type="hidden" name="egg_id" value="<?= $b['egg_id'] ?>">
+                                                        <button class="btn btn-danger btn-sm" type="submit" name="delete_batch">
+                                                            <i class="fas fa-trash"></i>
+                                                        </button>
+                                                    </form>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    <?php endif; ?>
+                </div>
+
+                <?php
+                // Display daily logs for each batch with improved layout
+                foreach ($batches as $b):
+                    try {
+                        $ls = $conn->prepare("SELECT * FROM egg_daily_logs WHERE egg_id = ? ORDER BY day_number ASC");
+                        $ls->execute([$b['egg_id']]);
+                        $dlogs = $ls->fetchAll(PDO::FETCH_ASSOC);
+                    } catch (PDOException $e) {
+                        $dlogs = [];
+                    }
+                    if (empty($dlogs)) continue;
+
+                    // Calculate totals for this batch
+                    $total_balut = array_sum(array_column($dlogs, 'balut_count'));
+                    $total_chicks = array_sum(array_column($dlogs, 'chick_count'));
+                    $total_failed = array_sum(array_column($dlogs, 'failed_count'));
+                ?>
+                    <div class="batch-logs-section">
+                        <div class="batch-logs-header">
+                            <h4>
+                                <i class="fas fa-history"></i>
+                                Batch #<?= $b['batch_number'] ?> — Daily Log
+                                <span class="batch-badge"><?= count($dlogs) ?> days recorded</span>
+                            </h4>
+                        </div>
+
+                        <!-- Summary stats for the batch -->
+                        <div class="logs-summary">
+                            <span class="logs-summary-item"><i class="fas fa-drumstick-bite" style="color:#f59e0b"></i> Balut: <?= number_format($total_balut) ?></span>
+                            <span class="logs-summary-item"><i class="fas fa-dove" style="color:#10b981"></i> Chicks: <?= number_format($total_chicks) ?></span>
+                            <span class="logs-summary-item"><i class="fas fa-times-circle" style="color:#ef4444"></i> Failed: <?= number_format($total_failed) ?></span>
+                        </div>
+
+                        <!-- Desktop view: Standard table -->
+                        <div class="table-wrapper daily-logs-desktop">
+                            <table class="data-table keep-standard">
+                                <thead>
+                                    <tr>
+                                        <th>Day</th>
+                                        <th>Balut</th>
+                                        <th>Chicks</th>
+                                        <th>Failed</th>
+                                        <th>Date Logged</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($dlogs as $dl): ?>
+                                        <tr>
+                                            <td data-label="Day">Day <?= $dl['day_number'] ?></td>
+                                            <td data-label="Balut"><?= number_format($dl['balut_count']) ?></td>
+                                            <td data-label="Chicks"><?= number_format($dl['chick_count']) ?></td>
+                                            <td data-label="Failed"><?= number_format($dl['failed_count']) ?></td>
+                                            <td data-label="Date Logged"><?= date('M d, Y', strtotime($dl['created_at'])) ?></td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Mobile view: Card-based layout -->
+                        <div class="daily-logs-mobile">
+                            <?php foreach ($dlogs as $dl): ?>
+                                <div class="log-card">
+                                    <div class="log-card-header">
+                                        <span class="log-day">Day <?= $dl['day_number'] ?></span>
+                                        <span class="log-date"><i class="far fa-calendar-alt"></i> <?= date('M d, Y', strtotime($dl['created_at'])) ?></span>
+                                    </div>
+                                    <div class="log-stats">
+                                        <span><i class="fas fa-drumstick-bite" style="color:#f59e0b"></i> Balut: <?= number_format($dl['balut_count']) ?></span>
+                                        <span><i class="fas fa-dove" style="color:#10b981"></i> Chicks: <?= number_format($dl['chick_count']) ?></span>
+                                        <span><i class="fas fa-times-circle" style="color:#ef4444"></i> Failed: <?= number_format($dl['failed_count']) ?></span>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+
+            <!-- =================== ANALYTICS TAB =================== -->
+            <div id="analytics-section" class="tab-section">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-info">
+                            <h3>Total Eggs</h3>
+                            <p><?= number_format($total_eggs) ?></p>
+                        </div>
+                        <div class="stat-icon ic-green"><i class="fas fa-egg"></i></div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-info">
+                            <h3>Balut Rate</h3>
+                            <p><?= $balut_rate ?>%</p>
+                        </div>
+                        <div class="stat-icon ic-yellow"><i class="fas fa-percentage"></i></div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-info">
+                            <h3>Chick Rate</h3>
+                            <p><?= $success_rate ?>%</p>
+                        </div>
+                        <div class="stat-icon ic-blue"><i class="fas fa-dove"></i></div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-info">
+                            <h3>Total Batches</h3>
+                            <p><?= count($batches) ?></p>
+                        </div>
+                        <div class="stat-icon ic-purple"><i class="fas fa-layer-group"></i></div>
+                    </div>
+                </div>
+
+                <div class="chart-row">
+                    <div class="chart-card">
+                        <h3><i class="fas fa-chart-pie" style="color:#10b981;margin-right:.5rem"></i>Outcome Distribution</h3>
+                        <canvas id="pieChart"></canvas>
+                    </div>
+                    <div class="chart-card">
+                        <h3><i class="fas fa-chart-bar" style="color:#3b82f6;margin-right:.5rem"></i>Daily Production Log</h3>
+                        <canvas id="dailyChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="chart-row">
+                    <div class="chart-card">
+                        <h3><i class="fas fa-chart-line" style="color:#f59e0b;margin-right:.5rem"></i>Batch Status</h3>
+                        <canvas id="statusChart"></canvas>
+                        <p style="text-align:center;color:#64748b;font-size:.85rem;margin-top:.75rem">
+                            Incubating: <strong><?= $stat_incubating ?></strong> &nbsp;|&nbsp; Complete: <strong><?= $stat_complete ?></strong>
+                        </p>
+                    </div>
+                    <div class="chart-card">
+                        <h3><i class="fas fa-info-circle" style="color:#8b5cf6;margin-right:.5rem"></i>Batch Summary</h3>
+                        <div class="table-wrapper">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Batch</th>
+                                        <th>Eggs</th>
+                                        <th>Balut</th>
+                                        <th>Chicks</th>
+                                        <th>Failed</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($batches as $b): ?>
+                                        <tr>
+                                            <td data-label="Batch">#<?= $b['batch_number'] ?></td>
+                                            <td data-label="Eggs"><?= number_format($b['total_egg']) ?></td>
+                                            <td data-label="Balut"><?= number_format($b['balut_count']) ?></td>
+                                            <td data-label="Chicks"><?= number_format($b['chick_count']) ?></td>
+                                            <td data-label="Failed"><?= number_format($b['failed_count']) ?></td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- =================== GUIDE TAB =================== -->
+            <div id="guide-section" class="tab-section">
+                <div class="guide-hero">
+                    <i class="fas fa-egg guide-hero-icon"></i>
+                    <div>
+                        <h2>Duck Egg Incubation Guide</h2>
+                        <p>Everything you need to know about balut production — from egg to table.</p>
+                    </div>
+                </div>
+
+                <div class="guide-grid">
+                    <div class="guide-card phase-early">
+                        <div class="guide-card-header">
+                            <span class="phase-num">Phase 1</span>
+                            <h3>Early Development</h3>
+                            <span class="phase-days">Days 1 – 13</span>
+                        </div>
+                        <ul class="guide-list">
+                            <li><i class="fas fa-thermometer-half"></i> Maintain 37.5–38°C (99.5–100.4°F)</li>
+                            <li><i class="fas fa-tint"></i> Humidity: 55–65%</li>
+                            <li><i class="fas fa-sync-alt"></i> Turn eggs 3–5× daily</li>
+                            <li><i class="fas fa-search"></i> Candle at Day 7 to check fertility</li>
+                            <li><i class="fas fa-ban"></i> <strong>Balut &amp; chick harvesting locked</strong></li>
+                        </ul>
+                        <div class="guide-tip"><i class="fas fa-lightbulb"></i> Remove infertile or dead eggs during candling to prevent contamination.</div>
+                    </div>
+
+                    <div class="guide-card phase-balut">
+                        <div class="guide-card-header">
+                            <span class="phase-num">Phase 2</span>
+                            <h3>Balut Harvest Window</h3>
+                            <span class="phase-days">Days 14 – 18</span>
+                        </div>
+                        <ul class="guide-list">
+                            <li><i class="fas fa-egg"></i> Embryo well-developed — ideal for balut</li>
+                            <li><i class="fas fa-fire"></i> Boil harvested eggs 20–30 minutes</li>
+                            <li><i class="fas fa-star"></i> Day 17–18 is peak balut quality</li>
+                            <li><i class="fas fa-temperature-low"></i> Refrigerate unboiled eggs if not eaten immediately</li>
+                        </ul>
+                        <div class="guide-tip"><i class="fas fa-lightbulb"></i> The broth is rich in protein — crack a small hole and drink it first!</div>
+                    </div>
+
+                    <div class="guide-card phase-watch">
+                        <div class="guide-card-header">
+                            <span class="phase-num">Phase 3</span>
+                            <h3>Late Incubation</h3>
+                            <span class="phase-days">Days 19 – 25</span>
+                        </div>
+                        <ul class="guide-list">
+                            <li><i class="fas fa-eye"></i> Stop turning eggs at Day 25</li>
+                            <li><i class="fas fa-tint"></i> Increase humidity to 70–75%</li>
+                            <li><i class="fas fa-volume-up"></i> You may hear peeping inside the eggs</li>
+                            <li><i class="fas fa-exclamation-triangle"></i> Avoid opening the incubator unnecessarily</li>
+                        </ul>
+                        <div class="guide-tip"><i class="fas fa-lightbulb"></i> Mist eggs lightly with warm water daily during this phase.</div>
+                    </div>
+
+                    <div class="guide-card phase-hatch">
+                        <div class="guide-card-header">
+                            <span class="phase-num">Phase 4</span>
+                            <h3>Hatching</h3>
+                            <span class="phase-days">Days 26 – 28</span>
+                        </div>
+                        <ul class="guide-list">
+                            <li><i class="fas fa-egg"></i> Pipping begins around Day 26</li>
+                            <li><i class="fas fa-clock"></i> Full hatch takes 12–24 hrs — do not help</li>
+                            <li><i class="fas fa-child"></i> Remove dried chicks 12–24h after hatch</li>
+                            <li><i class="fas fa-trash"></i> Discard unhatched eggs after Day 30</li>
+                        </ul>
+                        <div class="guide-tip"><i class="fas fa-lightbulb"></i> Ducklings don't need food/water for 24h after hatch — yolk sac sustains them.</div>
+                    </div>
+                </div>
+
+                <div class="table-container">
+                    <div class="table-header">
+                        <h3>Quick Reference: What Can Be Logged Per Day</h3>
+                    </div>
+                    <div class="table-wrapper">
                         <table class="data-table">
                             <thead>
                                 <tr>
-                                    <th>Batch #</th>
-                                    <th>Total Eggs</th>
-                                    <th>Day</th>
-                                    <th>Progress</th>
-                                    <th>Remaining</th>
-                                    <th>Action</th>
+                                    <th>Days</th>
+                                    <th>Failed Eggs</th>
+                                    <th>Balut</th>
+                                    <th>Chicks</th>
+                                    <th>Notes</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                <?php foreach ($active as $b):
-                                    $day  = $b['current_day'];
-                                    $proc = $b['failed_count'] + $b['balut_count'] + $b['chick_count'];
-                                    $rem  = $b['total_egg'] - $proc;
-                                    $pct  = $b['total_egg'] > 0 ? round(($proc / $b['total_egg']) * 100) : 0;
-                                    $locked = $day < BALUT_UNLOCK_DAY;
-                                    $logged = isset($today_logged_map[$b['egg_id']]) ? $today_logged_map[$b['egg_id']] : false;
-                                ?>
-                                    <tr>
-                                        <td><strong>#<?= $b['batch_number'] ?></strong>
-                </div>
-                <td><?= number_format($b['total_egg']) ?>
-            </div>
-            <td><span class="day-badge <?= $locked ? 'day-early' : ($day >= CHICK_UNLOCK_DAY ? 'day-late' : 'day-mid') ?>">Day <?= $day ?></span>
-    </div>
-    <td>
-        <div class="mini-progress">
-            <div class="mini-bar" style="width:<?= $pct ?>%"></div>
-        </div>
-        <small><?= $pct ?>%</small>
-        </div>
-    <td><?= number_format($rem) ?> </div>
-    <td>
-        <?php if ($logged): ?>
-            <span class="badge-done"><i class="fas fa-check"></i> Updated</span>
-        <?php elseif ($rem > 0): ?>
-            <button class="btn btn-success btn-sm" onclick="openUpdateModal(<?= $b['egg_id'] ?>, <?= $day ?>, <?= $rem ?>, <?= $locked ? 'true' : 'false' ?>)">
-                <i class="fas fa-edit"></i> Update
-            </button>
-        <?php else: ?>
-            <span class="badge-done">Complete</span>
-        <?php endif; ?>
-        </div>
-        </tr>
-    <?php endforeach; ?>
-    </tbody>
-    60
-<?php endif; ?>
-</div>
-
-<?php if (!empty($logs)): ?>
-    <div class="table-container">
-        <div class="table-header">
-            <h3>Recent Activity</h3>
-        </div>
-        <table class="data-table">
-            <thead>
-                <tr>
-                    <th>Time</th>
-                    <th>Action</th>
-                </tr>
-            </thead>
-            <tbody>
-                <?php foreach (array_slice($logs, 0, 8) as $log): ?>
-                    <tr>
-                        <td class="activity-time"><?= date('M d, H:i', strtotime($log['log_date'])) ?></td>
-                        <td><?= htmlspecialchars($log['action']) ?></td>
-                    </tr>
-                <?php endforeach; ?>
-            </tbody>
-        </table>
-    </div>
-<?php endif; ?>
-</div>
-
-<!-- =================== BATCHES TAB =================== -->
-<div id="batches-section" class="tab-section">
-    <div class="action-bar">
-        <button class="btn btn-primary" onclick="openAddModal()">
-            <i class="fas fa-plus-circle"></i> Add New Batch
-        </button>
-    </div>
-
-    <div class="table-container">
-        <div class="table-header">
-            <h3>All Batches</h3>
-        </div>
-        <?php if (empty($batches)): ?>
-            <div class="empty-state">
-                <i class="fas fa-box-open"></i>
-                <p>No batches yet. Click "Add New Batch" to get started!</p>
-            </div>
-        <?php else: ?>
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>Batch #</th>
-                        <th>Total</th>
-                        <th>Status</th>
-                        <th>Started</th>
-                        <th>Day</th>
-                        <th>Balut</th>
-                        <th>Chicks</th>
-                        <th>Failed</th>
-                        <th>Remaining</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($batches as $b):
-                        $day    = $b['current_day'];
-                        $proc   = $b['failed_count'] + $b['balut_count'] + $b['chick_count'];
-                        $rem    = $b['total_egg'] - $proc;
-                        $locked = $day < BALUT_UNLOCK_DAY;
-                        $logged = isset($today_logged_map[$b['egg_id']]) ? $today_logged_map[$b['egg_id']] : false;
-                    ?>
-                        <tr>
-                            <td><strong>#<?= $b['batch_number'] ?></strong></td>
-                            <td><?= number_format($b['total_egg']) ?></td>
-                            <td><span class="status-badge status-<?= $b['status'] ?>"><?= ucfirst($b['status']) ?></span></td>
-                            <td><?= date('M d, Y', strtotime($b['date_started_incubation'])) ?></td>
-                            <td><span class="day-badge <?= $locked ? 'day-early' : ($day >= CHICK_UNLOCK_DAY ? 'day-late' : 'day-mid') ?>">Day <?= $day ?></span></td>
-                            <td><?= number_format($b['balut_count']) ?></td>
-                            <td><?= number_format($b['chick_count']) ?></td>
-                            <td><?= number_format($b['failed_count']) ?></td>
-                            <td><strong><?= number_format($rem) ?></strong></td>
-                            <td>
-                                <div class="action-btns">
-                                    <?php if ($b['status'] === 'incubating' && $rem > 0 && !$logged): ?>
-                                        <button class="btn btn-warning btn-sm" onclick="openUpdateModal(<?= $b['egg_id'] ?>, <?= $day ?>, <?= $rem ?>, <?= $locked ? 'true' : 'false' ?>)">
-                                            <i class="fas fa-edit"></i> Update
-                                        </button>
-                                    <?php elseif ($logged && $b['status'] === 'incubating'): ?>
-                                        <span class="badge-done"><i class="fas fa-check"></i> Done today</span>
-                                    <?php endif; ?>
-                                    <form method="post" style="display:inline;" onsubmit="return confirm('Delete this batch? Cannot be undone.')">
-                                        <input type="hidden" name="egg_id" value="<?= $b['egg_id'] ?>">
-                                        <button class="btn btn-danger btn-sm" type="submit" name="delete_batch">
-                                            <i class="fas fa-trash"></i>
-                                        </button>
-                                    </form>
-                                </div>
-                            </td>
-                        </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
-        <?php endif; ?>
-    </div>
-
-    <?php
-    // Display daily logs for each batch
-    foreach ($batches as $b):
-        try {
-            $ls = $conn->prepare("SELECT * FROM egg_daily_logs WHERE egg_id = ? ORDER BY day_number ASC");
-            $ls->execute([$b['egg_id']]);
-            $dlogs = $ls->fetchAll(PDO::FETCH_ASSOC);
-        } catch (PDOException $e) {
-            $dlogs = [];
-        }
-        if (empty($dlogs)) continue;
-    ?>
-        <div class="table-container">
-            <div class="table-header">
-                <h3>Batch #<?= $b['batch_number'] ?> — Daily Log</h3>
-            </div>
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>Day</th>
-                        <th>Balut</th>
-                        <th>Chicks</th>
-                        <th>Failed</th>
-                        <th>Date Logged</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($dlogs as $dl): ?>
-                        <tr>
-                            <td>Day <?= $dl['day_number'] ?></td>
-                            <td><?= $dl['balut_count'] ?></td>
-                            <td><?= $dl['chick_count'] ?></td>
-                            <td><?= $dl['failed_count'] ?></td>
-                            <td><?= date('M d, Y', strtotime($dl['created_at'])) ?></td>
-                        </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
-        </div>
-    <?php endforeach; ?>
-</div>
-
-<!-- =================== ANALYTICS TAB =================== -->
-<div id="analytics-section" class="tab-section">
-    <div class="stats-grid">
-        <div class="stat-card">
-            <div class="stat-info">
-                <h3>Total Eggs</h3>
-                <p><?= number_format($total_eggs) ?></p>
-            </div>
-            <div class="stat-icon ic-green"><i class="fas fa-egg"></i></div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-info">
-                <h3>Balut Rate</h3>
-                <p><?= $balut_rate ?>%</p>
-            </div>
-            <div class="stat-icon ic-yellow"><i class="fas fa-percentage"></i></div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-info">
-                <h3>Chick Rate</h3>
-                <p><?= $success_rate ?>%</p>
-            </div>
-            <div class="stat-icon ic-blue"><i class="fas fa-dove"></i></div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-info">
-                <h3>Total Batches</h3>
-                <p><?= count($batches) ?></p>
-            </div>
-            <div class="stat-icon ic-purple"><i class="fas fa-layer-group"></i></div>
-        </div>
-    </div>
-
-    <div class="chart-row">
-        <div class="chart-card">
-            <h3><i class="fas fa-chart-pie" style="color:#10b981;margin-right:.5rem"></i>Outcome Distribution</h3>
-            <canvas id="pieChart"></canvas>
-        </div>
-        <div class="chart-card">
-            <h3><i class="fas fa-chart-bar" style="color:#3b82f6;margin-right:.5rem"></i>Daily Production Log</h3>
-            <canvas id="dailyChart"></canvas>
-        </div>
-    </div>
-
-    <div class="chart-row">
-        <div class="chart-card">
-            <h3><i class="fas fa-chart-line" style="color:#f59e0b;margin-right:.5rem"></i>Batch Status</h3>
-            <canvas id="statusChart"></canvas>
-            <p style="text-align:center;color:#64748b;font-size:.85rem;margin-top:.75rem">
-                Incubating: <strong><?= $stat_incubating ?></strong> &nbsp;|&nbsp; Complete: <strong><?= $stat_complete ?></strong>
-            </p>
-        </div>
-        <div class="chart-card">
-            <h3><i class="fas fa-info-circle" style="color:#8b5cf6;margin-right:.5rem"></i>Batch Summary</h3>
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>Batch</th>
-                        <th>Eggs</th>
-                        <th>Balut</th>
-                        <th>Chicks</th>
-                        <th>Failed</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($batches as $b): ?>
-                        <tr>
-                            <td>#<?= $b['batch_number'] ?></td>
-                            <td><?= $b['total_egg'] ?></td>
-                            <td><?= $b['balut_count'] ?></td>
-                            <td><?= $b['chick_count'] ?></td>
-                            <td><?= $b['failed_count'] ?></td>
-                        </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
-        </div>
-    </div>
-</div>
-
-<!-- =================== GUIDE TAB =================== -->
-<div id="guide-section" class="tab-section">
-    <div class="guide-hero">
-        <i class="fas fa-egg guide-hero-icon"></i>
-        <div>
-            <h2>Duck Egg Incubation Guide</h2>
-            <p>Everything you need to know about balut production — from egg to table.</p>
-        </div>
-    </div>
-
-    <div class="guide-grid">
-        <div class="guide-card phase-early">
-            <div class="guide-card-header">
-                <span class="phase-num">Phase 1</span>
-                <h3>Early Development</h3>
-                <span class="phase-days">Days 1 – 13</span>
-            </div>
-            <ul class="guide-list">
-                <li><i class="fas fa-thermometer-half"></i> Maintain 37.5–38°C (99.5–100.4°F)</li>
-                <li><i class="fas fa-tint"></i> Humidity: 55–65%</li>
-                <li><i class="fas fa-sync-alt"></i> Turn eggs 3–5× daily</li>
-                <li><i class="fas fa-search"></i> Candle at Day 7 to check fertility</li>
-                <li><i class="fas fa-ban"></i> <strong>Balut &amp; chick harvesting locked</strong></li>
-            </ul>
-            <div class="guide-tip"><i class="fas fa-lightbulb"></i> Remove infertile or dead eggs during candling to prevent contamination.</div>
-        </div>
-
-        <div class="guide-card phase-balut">
-            <div class="guide-card-header">
-                <span class="phase-num">Phase 2</span>
-                <h3>Balut Harvest Window</h3>
-                <span class="phase-days">Days 14 – 18</span>
-            </div>
-            <ul class="guide-list">
-                <li><i class="fas fa-egg"></i> Embryo well-developed — ideal for balut</li>
-                <li><i class="fas fa-fire"></i> Boil harvested eggs 20–30 minutes</li>
-                <li><i class="fas fa-star"></i> Day 17–18 is peak balut quality</li>
-                <li><i class="fas fa-temperature-low"></i> Refrigerate unboiled eggs if not eaten immediately</li>
-            </ul>
-            <div class="guide-tip"><i class="fas fa-lightbulb"></i> The broth is rich in protein — crack a small hole and drink it first!</div>
-        </div>
-
-        <div class="guide-card phase-watch">
-            <div class="guide-card-header">
-                <span class="phase-num">Phase 3</span>
-                <h3>Late Incubation</h3>
-                <span class="phase-days">Days 19 – 25</span>
-            </div>
-            <ul class="guide-list">
-                <li><i class="fas fa-eye"></i> Stop turning eggs at Day 25</li>
-                <li><i class="fas fa-tint"></i> Increase humidity to 70–75%</li>
-                <li><i class="fas fa-volume-up"></i> You may hear peeping inside the eggs</li>
-                <li><i class="fas fa-exclamation-triangle"></i> Avoid opening the incubator unnecessarily</li>
-            </ul>
-            <div class="guide-tip"><i class="fas fa-lightbulb"></i> Mist eggs lightly with warm water daily during this phase.</div>
-        </div>
-
-        <div class="guide-card phase-hatch">
-            <div class="guide-card-header">
-                <span class="phase-num">Phase 4</span>
-                <h3>Hatching</h3>
-                <span class="phase-days">Days 26 – 28</span>
-            </div>
-            <ul class="guide-list">
-                <li><i class="fas fa-egg"></i> Pipping begins around Day 26</li>
-                <li><i class="fas fa-clock"></i> Full hatch takes 12–24 hrs — do not help</li>
-                <li><i class="fas fa-child"></i> Remove dried chicks 12–24h after hatch</li>
-                <li><i class="fas fa-trash"></i> Discard unhatched eggs after Day 30</li>
-            </ul>
-            <div class="guide-tip"><i class="fas fa-lightbulb"></i> Ducklings don't need food/water for 24h after hatch — yolk sac sustains them.</div>
-        </div>
-    </div>
-
-    <div class="table-container">
-        <div class="table-header">
-            <h3>Quick Reference: What Can Be Logged Per Day</h3>
-        </div>
-        <table class="data-table">
-            <thead>
-                <tr>
-                    <th>Days</th>
-                    <th>Failed Eggs</th>
-                    <th>Balut</th>
-                    <th>Chicks</th>
-                    <th>Notes</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td>1 – 13</td>
-                    <td><span class="badge-yes">✓ Yes</span></td>
-                    <td><span class="badge-no">✗ Locked</span></td>
-                    <td><span class="badge-no">✗ Locked</span></td>
-                    <td>Only failed/infertile removal allowed</td>
-                </tr>
-                <tr>
-                    <td>14 – 18</td>
-                    <td><span class="badge-yes">✓ Yes</span></td>
-                    <td><span class="badge-yes">✓ Yes</span></td>
-                    <td><span class="badge-no">✗ Locked</span></td>
-                    <td>Peak balut harvest window</td>
-                </tr>
-                <tr>
-                    <td>19 – 24</td>
-                    <td><span class="badge-yes">✓ Yes</span></td>
-                    <td><span class="badge-yes">✓ Yes</span></td>
-                    <td><span class="badge-no">✗ Locked</span></td>
-                    <td>Late balut; monitor closely</td>
-                </tr>
-                <tr>
-                    <td>25 – 28</td>
-                    <td><span class="badge-yes">✓ Yes</span></td>
-                    <td><span class="badge-yes">✓ Yes</span></td>
-                    <td><span class="badge-yes">✓ Yes</span></td>
-                    <td>Hatching window</td>
-                </tr>
-                <tr>
-                    <td>29+</td>
-                    <td><span class="badge-yes">✓ Yes</span></td>
-                    <td><span class="badge-yes">✓ Yes</span></td>
-                    <td><span class="badge-yes">✓ Yes</span></td>
-                    <td>Discard unhatched after Day 30</td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
-
-    <div class="table-container">
-        <div class="table-header">
-            <h3>Troubleshooting</h3>
-        </div>
-        <table class="data-table">
-            <thead>
-                <tr>
-                    <th>Problem</th>
-                    <th>Possible Cause</th>
-                    <th>Solution</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td>High failure rate early</td>
-                    <td>Infertile eggs / temp spike</td>
-                    <td>Candle at Day 7; check thermostat</td>
-                </tr>
-                <tr>
-                    <td>No hatching after Day 28</td>
-                    <td>Low humidity / temp too low</td>
-                    <td>Increase humidity; verify calibration</td>
-                </tr>
-                <tr>
-                    <td>Chick dies in shell</td>
-                    <td>Humidity too low at hatch</td>
-                    <td>Mist eggs during lockdown phase</td>
-                </tr>
-                <tr>
-                    <td>Bad smell from incubator</td>
-                    <td>Rotten/exploded egg</td>
-                    <td>Remove immediately; clean incubator</td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
-</div>
-
-</main>
-</div>
-
-<!-- Add Batch Modal -->
-<div id="addModal" class="modal">
-    <div class="modal-content">
-        <div class="modal-header">
-            <h3><i class="fas fa-plus-circle"></i> Add New Batch</h3>
-            <button class="close" onclick="closeModal('addModal')">&times;</button>
-        </div>
-        <form method="post">
-            <div class="modal-body">
-                <div class="form-group">
-                    <label>Total Eggs</label>
-                    <input type="number" name="total_egg" min="1" placeholder="e.g. 100" required>
-                </div>
-                <div class="guide-tip" style="margin-top:1rem">
-                    <i class="fas fa-info-circle"></i>
-                    Today is Day 1. The day will automatically increment each day.
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" onclick="closeModal('addModal')">Cancel</button>
-                <button type="submit" name="add_batch" class="btn btn-primary">Start Batch</button>
-            </div>
-        </form>
-    </div>
-</div>
-
-<!-- Update Modal -->
-<div id="updateModal" class="modal">
-    <div class="modal-content">
-        <div class="modal-header">
-            <h3><i class="fas fa-edit"></i> Update Batch — Day <span id="modalDay">1</span></h3>
-            <button class="close" onclick="closeModal('updateModal')">&times;</button>
-        </div>
-        <form method="post" onsubmit="return validateUpdate()">
-            <input type="hidden" name="egg_id" id="updateEggId">
-            <div class="modal-body">
-                <div class="remaining-info">
-                    <i class="fas fa-info-circle"></i>
-                    <span id="remainingText">0 eggs remaining</span>
-                </div>
-                <div id="lockNotice" class="lock-notice" style="display:none">
-                    <i class="fas fa-lock"></i>
-                    <div>
-                        <strong>Balut &amp; Chick updates locked</strong>
-                        <p>Unlocks at Day <?= BALUT_UNLOCK_DAY ?>. Only failed egg removal is allowed now.</p>
+                                <tr>
+                                    <td data-label="Days">1 – 13</td>
+                                    <td data-label="Failed Eggs"><span class="badge-yes">✓ Yes</span></td>
+                                    <td data-label="Balut"><span class="badge-no">✗ Locked</span></td>
+                                    <td data-label="Chicks"><span class="badge-no">✗ Locked</span></td>
+                                    <td data-label="Notes">Only failed/infertile removal allowed</td>
+                                </tr>
+                                <tr>
+                                    <td data-label="Days">14 – 18</td>
+                                    <td data-label="Failed Eggs"><span class="badge-yes">✓ Yes</span></td>
+                                    <td data-label="Balut"><span class="badge-yes">✓ Yes</span></td>
+                                    <td data-label="Chicks"><span class="badge-no">✗ Locked</span></td>
+                                    <td data-label="Notes">Peak balut harvest window</td>
+                                </tr>
+                                <tr>
+                                    <td data-label="Days">19 – 24</td>
+                                    <td data-label="Failed Eggs"><span class="badge-yes">✓ Yes</span></td>
+                                    <td data-label="Balut"><span class="badge-yes">✓ Yes</span></td>
+                                    <td data-label="Chicks"><span class="badge-no">✗ Locked</span></td>
+                                    <td data-label="Notes">Late balut; monitor closely</td>
+                                </tr>
+                                <tr>
+                                    <td data-label="Days">25 – 28</td>
+                                    <td data-label="Failed Eggs"><span class="badge-yes">✓ Yes</span></td>
+                                    <td data-label="Balut"><span class="badge-yes">✓ Yes</span></td>
+                                    <td data-label="Chicks"><span class="badge-yes">✓ Yes</span></td>
+                                    <td data-label="Notes">Hatching window</td>
+                                </tr>
+                                <tr>
+                                    <td data-label="Days">29+</td>
+                                    <td data-label="Failed Eggs"><span class="badge-yes">✓ Yes</span></td>
+                                    <td data-label="Balut"><span class="badge-yes">✓ Yes</span></td>
+                                    <td data-label="Chicks"><span class="badge-yes">✓ Yes</span></td>
+                                    <td data-label="Notes">Discard unhatched after Day 30</td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
-                <div class="form-group">
-                    <label><i class="fas fa-times-circle" style="color:#ef4444"></i> Failed Eggs</label>
-                    <input type="number" name="failed_count" id="failedInput" min="0" value="0" oninput="checkTotal()">
+
+                <div class="table-container">
+                    <div class="table-header">
+                        <h3>Troubleshooting</h3>
+                    </div>
+                    <div class="table-wrapper">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Problem</th>
+                                    <th>Possible Cause</th>
+                                    <th>Solution</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td data-label="Problem">High failure rate early</td>
+                                    <td data-label="Possible Cause">Infertile eggs / temp spike</td>
+                                    <td data-label="Solution">Candle at Day 7; check thermostat</td>
+                                </tr>
+                                <tr>
+                                    <td data-label="Problem">No hatching after Day 28</td>
+                                    <td data-label="Possible Cause">Low humidity / temp too low</td>
+                                    <td data-label="Solution">Increase humidity; verify calibration</td>
+                                </tr>
+                                <tr>
+                                    <td data-label="Problem">Chick dies in shell</td>
+                                    <td data-label="Possible Cause">Humidity too low at hatch</td>
+                                    <td data-label="Solution">Mist eggs during lockdown phase</td>
+                                </tr>
+                                <tr>
+                                    <td data-label="Problem">Bad smell from incubator</td>
+                                    <td data-label="Possible Cause">Rotten/exploded egg</td>
+                                    <td data-label="Solution">Remove immediately; clean incubator</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
-                <div class="form-group" id="balutGroup">
-                    <label><i class="fas fa-drumstick-bite" style="color:#f59e0b"></i> Balut Harvested</label>
-                    <input type="number" name="balut_count" id="balutInput" min="0" value="0" oninput="checkTotal()">
-                </div>
-                <div class="form-group" id="chickGroup">
-                    <label><i class="fas fa-dove" style="color:#10b981"></i> Chicks Hatched</label>
-                    <input type="number" name="chick_count" id="chickInput" min="0" value="0" oninput="checkTotal()">
-                </div>
-                <div id="validationMsg" class="alert alert-error" style="display:none;margin-top:.5rem"></div>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" onclick="closeModal('updateModal')">Cancel</button>
-                <button type="submit" name="update_daily" class="btn btn-primary" id="submitUpdateBtn">Save Update</button>
-            </div>
-        </form>
+
+        </main>
     </div>
-</div>
 
-<!-- JavaScript -->
-<script>
-    const PHP = {
-        totalBalut: <?= (int)$stat_balut ?>,
-        totalChicks: <?= (int)$stat_chicks ?>,
-        totalFailed: <?= (int)$stat_failed ?>,
-        incubating: <?= (int)$stat_incubating ?>,
-        complete: <?= (int)$stat_complete ?>,
-        dailyAnalytics: <?= json_encode($daily_analytics) ?>,
-        batchRemaining: <?= json_encode($batch_remaining) ?>,
-        BALUT_UNLOCK: <?= BALUT_UNLOCK_DAY ?>,
-        CHICK_UNLOCK: <?= CHICK_UNLOCK_DAY ?>,
-    };
+    <!-- Add Batch Modal -->
+    <div id="addModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-plus-circle"></i> Add New Batch</h3>
+                <button class="close" onclick="closeModal('addModal')">&times;</button>
+            </div>
+            <form method="post">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>Total Eggs</label>
+                        <input type="number" name="total_egg" min="1" placeholder="e.g. 100" required>
+                    </div>
+                    <div class="guide-tip" style="margin-top:1rem">
+                        <i class="fas fa-info-circle"></i>
+                        Today is Day 1. The day will automatically increment each day.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('addModal')">Cancel</button>
+                    <button type="submit" name="add_batch" class="btn btn-primary">Start Batch</button>
+                </div>
+            </form>
+        </div>
+    </div>
 
-    function openAddModal() {
-        document.getElementById('addModal').classList.add('active');
-    }
+    <!-- Update Modal -->
+    <div id="updateModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-edit"></i> Update Batch — Day <span id="modalDay">1</span></h3>
+                <button class="close" onclick="closeModal('updateModal')">&times;</button>
+            </div>
+            <form method="post" onsubmit="return validateUpdate()">
+                <input type="hidden" name="egg_id" id="updateEggId">
+                <div class="modal-body">
+                    <div class="remaining-info">
+                        <i class="fas fa-info-circle"></i>
+                        <span id="remainingText">0 eggs remaining</span>
+                    </div>
+                    <div id="lockNotice" class="lock-notice" style="display:none">
+                        <i class="fas fa-lock"></i>
+                        <div>
+                            <strong>Balut &amp; Chick updates locked</strong>
+                            <p>Unlocks at Day <?= BALUT_UNLOCK_DAY ?>. Only failed egg removal is allowed now.</p>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-times-circle" style="color:#ef4444"></i> Failed Eggs</label>
+                        <input type="number" name="failed_count" id="failedInput" min="0" value="0" oninput="checkTotal()">
+                    </div>
+                    <div class="form-group" id="balutGroup">
+                        <label><i class="fas fa-drumstick-bite" style="color:#f59e0b"></i> Balut Harvested</label>
+                        <input type="number" name="balut_count" id="balutInput" min="0" value="0" oninput="checkTotal()">
+                    </div>
+                    <div class="form-group" id="chickGroup">
+                        <label><i class="fas fa-dove" style="color:#10b981"></i> Chicks Hatched</label>
+                        <input type="number" name="chick_count" id="chickInput" min="0" value="0" oninput="checkTotal()">
+                    </div>
+                    <div id="validationMsg" class="alert alert-error" style="display:none;margin-top:.5rem"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('updateModal')">Cancel</button>
+                    <button type="submit" name="update_daily" class="btn btn-primary" id="submitUpdateBtn">Save Update</button>
+                </div>
+            </form>
+        </div>
+    </div>
 
-    function openUpdateModal(eggId, dayNumber, remaining, lockBalutChick) {
-        document.getElementById('updateEggId').value = eggId;
-        document.getElementById('modalDay').textContent = dayNumber;
-        document.getElementById('remainingText').textContent = remaining + ' eggs remaining';
-        document.getElementById('failedInput').value = 0;
-        document.getElementById('balutInput').value = 0;
-        document.getElementById('chickInput').value = 0;
-        document.getElementById('submitUpdateBtn').disabled = false;
-        document.getElementById('validationMsg').style.display = 'none';
-
-        if (lockBalutChick) {
-            document.getElementById('lockNotice').style.display = 'flex';
-            document.getElementById('balutInput').disabled = true;
-            document.getElementById('chickInput').disabled = true;
-            document.getElementById('balutGroup').style.opacity = '0.45';
-            document.getElementById('chickGroup').style.opacity = '0.45';
-        } else {
-            document.getElementById('lockNotice').style.display = 'none';
-            document.getElementById('balutInput').disabled = false;
-            document.getElementById('chickInput').disabled = false;
-            document.getElementById('balutGroup').style.opacity = '1';
-            document.getElementById('chickGroup').style.opacity = '1';
-        }
-        document.getElementById('updateModal').classList.add('active');
-    }
-
-    function closeModal(id) {
-        document.getElementById(id).classList.remove('active');
-    }
-
-    function checkTotal() {
-        var eggId = document.getElementById('updateEggId').value;
-        var failed = parseInt(document.getElementById('failedInput').value) || 0;
-        var balut = parseInt(document.getElementById('balutInput').value) || 0;
-        var chick = parseInt(document.getElementById('chickInput').value) || 0;
-        var total = failed + balut + chick;
-        var remaining = PHP.batchRemaining[eggId] || 0;
-
-        if (total > remaining) {
-            document.getElementById('validationMsg').textContent = 'Total entered exceeds remaining eggs.';
-            document.getElementById('validationMsg').style.display = 'flex';
-            document.getElementById('submitUpdateBtn').disabled = true;
-        } else {
-            document.getElementById('validationMsg').style.display = 'none';
-            document.getElementById('submitUpdateBtn').disabled = false;
-        }
-    }
-
-    function validateUpdate() {
-        var failed = parseInt(document.getElementById('failedInput').value) || 0;
-        var balut = parseInt(document.getElementById('balutInput').value) || 0;
-        var chick = parseInt(document.getElementById('chickInput').value) || 0;
-
-        if (failed + balut + chick === 0) {
-            document.getElementById('validationMsg').textContent = 'Enter at least one value greater than 0.';
-            document.getElementById('validationMsg').style.display = 'flex';
-            return false;
-        }
-        return true;
-    }
-
-    function switchTab(name) {
-        const titles = {
-            overview: 'Overview of your incubation batches',
-            batches: 'Manage all your egg batches',
-            analytics: 'Your production analytics',
-            guide: 'Incubation guide & reference',
-        };
-        document.querySelectorAll('.nav-item[data-tab]').forEach(li => {
-            li.classList.toggle('active', li.dataset.tab === name);
-        });
-        document.querySelectorAll('.tab-section').forEach(sec => {
-            sec.classList.toggle('active', sec.id === name + '-section');
-        });
-        document.getElementById('page-subtitle').textContent = titles[name] || '';
-        if (name === 'analytics') initCharts();
-    }
-
-    function initCharts() {
-        if (window.chartsInitialized) return;
-        if (typeof Chart === 'undefined') return;
-        window.chartsInitialized = true;
-
-        var pieEl = document.getElementById('pieChart');
-        if (pieEl) {
-            new Chart(pieEl, {
-                type: 'doughnut',
-                data: {
-                    labels: ['Balut', 'Chicks', 'Failed'],
-                    datasets: [{
-                        data: [PHP.totalBalut, PHP.totalChicks, PHP.totalFailed],
-                        backgroundColor: ['#f59e0b', '#10b981', '#ef4444']
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    plugins: {
-                        legend: {
-                            position: 'bottom'
-                        }
-                    },
-                    cutout: '65%'
-                }
-            });
-        }
-
-        var dayEl = document.getElementById('dailyChart');
-        if (dayEl && PHP.dailyAnalytics.length) {
-            new Chart(dayEl, {
-                type: 'bar',
-                data: {
-                    labels: PHP.dailyAnalytics.map(r => 'Day ' + r.day_number),
-                    datasets: [{
-                            label: 'Balut',
-                            data: PHP.dailyAnalytics.map(r => parseInt(r.balut)),
-                            backgroundColor: 'rgba(245,158,11,.75)'
-                        },
-                        {
-                            label: 'Chicks',
-                            data: PHP.dailyAnalytics.map(r => parseInt(r.chicks)),
-                            backgroundColor: 'rgba(16,185,129,.75)'
-                        },
-                        {
-                            label: 'Failed',
-                            data: PHP.dailyAnalytics.map(r => parseInt(r.failed)),
-                            backgroundColor: 'rgba(239,68,68,.75)'
-                        }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    scales: {
-                        y: {
-                            beginAtZero: true
-                        }
-                    }
-                }
-            });
-        }
-
-        var statEl = document.getElementById('statusChart');
-        if (statEl) {
-            new Chart(statEl, {
-                type: 'doughnut',
-                data: {
-                    labels: ['Incubating', 'Complete'],
-                    datasets: [{
-                        data: [PHP.incubating, PHP.complete],
-                        backgroundColor: ['#f59e0b', '#10b981']
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    cutout: '60%'
-                }
-            });
-        }
-    }
-
-    document.querySelectorAll('.modal').forEach(m => {
-        m.addEventListener('click', e => {
-            if (e.target === m) m.classList.remove('active');
-        });
-    });
-
-    document.querySelectorAll('.alert').forEach(el => {
-        setTimeout(() => {
-            el.style.transition = 'opacity .5s';
-            el.style.opacity = '0';
-            setTimeout(() => el.remove(), 500);
-        }, 5000);
-    });
-
-    document.addEventListener('DOMContentLoaded', () => {
-        document.querySelectorAll('.nav-item[data-tab]').forEach(li => {
-            li.querySelector('a').addEventListener('click', e => {
-                e.preventDefault();
-                switchTab(li.dataset.tab);
-            });
-        });
-        switchTab('overview');
-    });
-</script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script>
+        // Pass PHP variables to JavaScript
+        window.EggFlowConfig = <?= json_encode($js_vars) ?>;
+    </script>
+    <script src="../../assets/user/js/user_dashboard.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </body>
 
 </html>

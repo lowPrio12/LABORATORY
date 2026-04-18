@@ -1,0 +1,406 @@
+/* =========================================================
+   dashboard_responsive.css  –  EggFlow User Dashboard
+   Responsive enhancements for batch logs and tables
+   ========================================================= */
+
+/* ── Table wrapper for horizontal scroll ───────────────── */
+.table-wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin-bottom: 0.5rem;
+}
+
+/* ── Responsive table - Card layout on mobile ──────────── */
+@media (max-width: 768px) {
+    .data-table thead {
+        display: none;
+    }
+
+    .data-table tbody tr {
+        display: block;
+        margin-bottom: 1rem;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 0.75rem;
+        background: white;
+    }
+
+    .data-table tbody td {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.5rem 0;
+        border-bottom: 1px solid #f1f5f9;
+        text-align: right;
+    }
+
+    .data-table tbody td:last-child {
+        border-bottom: none;
+    }
+
+    .data-table tbody td::before {
+        content: attr(data-label);
+        font-weight: 600;
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        color: #64748b;
+        letter-spacing: 0.5px;
+        text-align: left;
+    }
+
+    .action-btns {
+        justify-content: flex-end;
+    }
+}
+
+/* ── Daily logs container styling ──────────────────────── */
+.batch-logs-section {
+    background: white;
+    border-radius: 20px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.batch-logs-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 2px solid #e2e8f0;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.batch-logs-header h4 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #0f172a;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.batch-badge {
+    background: #10b981;
+    color: white;
+    padding: 0.2rem 0.6rem;
+    border-radius: 20px;
+    font-size: 0.7rem;
+    font-weight: 600;
+}
+
+/* ── Logs summary stats ────────────────────────────────── */
+.logs-summary {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+    padding: 0.75rem;
+    background: #f8fafc;
+    border-radius: 12px;
+}
+
+.logs-summary-item {
+    font-size: 0.8rem;
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.logs-summary-item i {
+    font-size: 0.75rem;
+}
+
+/* ── Mobile card view for daily logs ───────────────────── */
+.daily-logs-mobile {
+    display: none;
+}
+
+.log-card {
+    background: #f8fafc;
+    border-radius: 12px;
+    padding: 0.75rem;
+    margin-bottom: 0.5rem;
+}
+
+.log-card-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid #e2e8f0;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.log-day {
+    font-weight: 700;
+    color: #10b981;
+}
+
+.log-date {
+    font-size: 0.7rem;
+    color: #64748b;
+}
+
+.log-stats {
+    display: flex;
+    gap: 1rem;
+    font-size: 0.8rem;
+    flex-wrap: wrap;
+}
+
+.log-stats span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+/* ── Desktop/tablet table view ─────────────────────────── */
+@media (min-width: 769px) {
+    .daily-logs-mobile {
+        display: none;
+    }
+
+    .daily-logs-desktop {
+        display: block;
+    }
+}
+
+/* ── Mobile: Hide desktop table, show cards ────────────── */
+@media (max-width: 768px) {
+    .daily-logs-desktop {
+        display: none;
+    }
+
+    .daily-logs-mobile {
+        display: block;
+    }
+
+    /* Keep standard table for batch logs section on mobile? No, use cards */
+    .batch-logs-section .data-table.keep-standard thead {
+        display: table-header-group;
+    }
+
+    .batch-logs-section .data-table.keep-standard tbody tr {
+        display: table-row;
+        border: none;
+        padding: 0;
+    }
+
+    .batch-logs-section .data-table.keep-standard tbody td {
+        display: table-cell;
+        padding: 0.75rem 0.5rem;
+    }
+
+    .batch-logs-section .data-table.keep-standard tbody td::before {
+        display: none;
+    }
+}
+
+/* ── Stats grid responsiveness ─────────────────────────── */
+@media (max-width: 640px) {
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1rem;
+    }
+
+    .stat-card {
+        padding: 1rem;
+    }
+
+    .stat-info p {
+        font-size: 1.5rem;
+    }
+
+    .stat-icon {
+        width: 40px;
+        height: 40px;
+        font-size: 1.2rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .stats-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ── Timeline bar responsiveness ───────────────────────── */
+@media (max-width: 768px) {
+    .timeline-bar {
+        flex-wrap: wrap;
+        height: auto;
+        border-radius: 12px;
+    }
+
+    .tl-segment {
+        width: 50%;
+        padding: 0.6rem;
+        text-align: center;
+    }
+
+    .tl-segment span {
+        font-size: 0.7rem;
+    }
+
+    .tl-segment small {
+        font-size: 0.6rem;
+    }
+}
+
+/* ── Chart row responsiveness ──────────────────────────── */
+@media (max-width: 1024px) {
+    .chart-row {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+}
+
+/* ── Guide grid responsiveness ─────────────────────────── */
+@media (max-width: 768px) {
+    .guide-grid {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+
+    .guide-hero {
+        flex-direction: column;
+        text-align: center;
+        padding: 1.5rem;
+    }
+
+    .guide-hero-icon {
+        font-size: 2.5rem;
+    }
+
+    .guide-hero h2 {
+        font-size: 1.25rem;
+    }
+}
+
+/* ── Action bar responsiveness ─────────────────────────── */
+@media (max-width: 640px) {
+    .action-bar {
+        flex-direction: column;
+    }
+
+    .action-bar .btn {
+        width: 100%;
+        justify-content: center;
+    }
+}
+
+/* ── Top bar responsiveness ────────────────────────────── */
+@media (max-width: 768px) {
+    .top-bar {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.75rem;
+        padding: 1rem;
+    }
+
+    .welcome-text h1 {
+        font-size: 1.25rem;
+    }
+
+    .date-badge {
+        font-size: 0.75rem;
+    }
+}
+
+/* ── Modal responsiveness ──────────────────────────────── */
+@media (max-width: 640px) {
+    .modal-content {
+        width: 95%;
+        margin: 1rem;
+    }
+
+    .modal-body {
+        padding: 1.25rem;
+    }
+
+    .modal-footer {
+        padding: 1rem 1.25rem;
+        flex-direction: column;
+    }
+
+    .modal-footer .btn {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .modal-header {
+        padding: 1rem 1.25rem;
+    }
+}
+
+/* ── Sidebar toggle for mobile (optional) ──────────────── */
+@media (max-width: 768px) {
+    .sidebar {
+        transform: translateX(-100%);
+        transition: transform 0.3s ease;
+        position: fixed;
+        z-index: 1000;
+        width: 260px;
+    }
+
+    .sidebar.open {
+        transform: translateX(0);
+    }
+
+    .main-content {
+        margin-left: 0;
+        padding: 1rem;
+    }
+}
+
+/* ── Button group on tables ────────────────────────────── */
+@media (max-width: 640px) {
+    .action-btns {
+        flex-direction: column;
+        gap: 0.5rem;
+        width: 100%;
+    }
+
+    .action-btns .btn-sm,
+    .action-btns form {
+        width: 100%;
+    }
+
+    .action-btns .btn-sm {
+        width: 100%;
+        justify-content: center;
+    }
+}
+
+/* ── Table container padding ───────────────────────────── */
+@media (max-width: 640px) {
+    .table-container {
+        padding: 1rem;
+    }
+
+    .table-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.75rem;
+    }
+
+    .table-header h3 {
+        font-size: 1rem;
+    }
+}
+
+/* ── Empty state ───────────────────────────────────────── */
+@media (max-width: 640px) {
+    .empty-state {
+        padding: 2rem 1rem;
+    }
+
+    .empty-state i {
+        font-size: 2rem;
+    }
+}
