@@ -1200,7 +1200,7 @@ $activeTab = isset($_GET['tab']) ? $_GET['tab'] : 'users';
                 <?php else: ?>
                     <!-- Manager Sidebar Links -->
                     <li>
-                        <a href="../manager/dashboard.php">
+                        <a href="../manager/dashboard.php?tab=overview">
                             <i class="fas fa-tachometer-alt"></i>
                             Dashboard
                         </a>
@@ -1869,7 +1869,7 @@ $activeTab = isset($_GET['tab']) ? $_GET['tab'] : 'users';
             document.getElementById('sidebar').classList.toggle('active');
         });
 
-        // Update timestamp display
+        // Update timestamp displaya
         function updateTimestamps() {
             // Timestamps are already formatted
         }

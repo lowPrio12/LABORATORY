@@ -9,6 +9,13 @@ if (!isset($_SESSION['user_id']) || $_SESSION['user_role'] !== 'manager') {
 
 $manager_id = $_SESSION['user_id'];
 
+// Get active tab from URL parameter
+$activeTab = isset($_GET['tab']) ? $_GET['tab'] : 'overview';
+$validTabs = ['overview', 'analytics', 'reports'];
+if (!in_array($activeTab, $validTabs)) {
+    $activeTab = 'overview';
+}
+
 // Helper: time ago
 function timeAgo($datetime)
 {
@@ -218,6 +225,10 @@ if ($reportType === 'userSummary') {
     $stmt->execute([$startDate, $endDate . ' 23:59:59']);
     $reportData = $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
+
+// Get incubating and complete batch counts for analytics
+$incubating = $conn->query("SELECT COUNT(*) FROM egg WHERE status='incubating'")->fetchColumn();
+$complete   = $conn->query("SELECT COUNT(*) FROM egg WHERE status='complete'")->fetchColumn();
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -484,6 +495,22 @@ if ($reportType === 'userSummary') {
             font-size: .75rem;
             font-weight: 600;
         }
+
+        /* Alert styles */
+        .alert {
+            padding: 1rem 1.5rem;
+            border-radius: 12px;
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .alert-success {
+            background: #dcfce7;
+            color: #166534;
+            border-left: 4px solid #10b981;
+        }
     </style>
 </head>
 
@@ -496,17 +523,17 @@ if ($reportType === 'userSummary') {
                 <p>Balut Management & Oversight</p>
             </div>
             <ul class="sidebar-menu">
-                <li class="nav-item active" data-tab="overview">
-                    <a href="#"><i class="fas fa-tachometer-alt"></i> Overview</a>
+                <li class="nav-item <?= $activeTab == 'overview' ? 'active' : '' ?>" data-tab="overview">
+                    <a href="?tab=overview"><i class="fas fa-tachometer-alt"></i> Overview</a>
                 </li>
-                <li class="nav-item" data-tab="users">
+                <li class="nav-item">
                     <a href="../users/user-management.php"><i class="fas fa-users"></i> User Management</a>
                 </li>
-                <li class="nav-item" data-tab="analytics">
-                    <a href="#"><i class="fas fa-chart-line"></i> Analytics</a>
+                <li class="nav-item <?= $activeTab == 'analytics' ? 'active' : '' ?>" data-tab="analytics">
+                    <a href="?tab=analytics"><i class="fas fa-chart-line"></i> Analytics</a>
                 </li>
-                <li class="nav-item" data-tab="reports">
-                    <a href="#"><i class="fas fa-file-alt"></i> Reports</a>
+                <li class="nav-item <?= $activeTab == 'reports' ? 'active' : '' ?>" data-tab="reports">
+                    <a href="?tab=reports"><i class="fas fa-file-alt"></i> Reports</a>
                 </li>
                 <li>
                     <a href="../../controller/auth/signout.php"><i class="fas fa-sign-out-alt"></i> Logout</a>
@@ -520,7 +547,7 @@ if ($reportType === 'userSummary') {
             <div class="top-bar">
                 <div class="welcome-text">
                     <h1>Welcome, <?= htmlspecialchars($_SESSION['user_name'] ?? 'Manager') ?></h1>
-                    <p id="page-subtitle">Overview & key metrics</p>
+                    <p id="page-subtitle"><?= $activeTab == 'overview' ? 'Overview & key metrics' : ($activeTab == 'analytics' ? 'Production analytics' : 'Generate & export reports') ?></p>
                 </div>
                 <div class="date-badge">
                     <i class="far fa-calendar-alt"></i> <?= date('l, F j, Y') ?>
@@ -534,7 +561,7 @@ if ($reportType === 'userSummary') {
             <?php endif; ?>
 
             <!-- ═══════════════ OVERVIEW TAB ═══════════════ -->
-            <div id="overview-section" class="tab-section active">
+            <div id="overview-section" class="tab-section <?= $activeTab == 'overview' ? 'active' : '' ?>">
                 <div class="stats-grid">
                     <div class="stat-card">
                         <div class="stat-info">
@@ -581,7 +608,7 @@ if ($reportType === 'userSummary') {
                 </div>
 
                 <div class="action-bar">
-                    <button class="btn btn-primary" onclick="openModal()">
+                    <button class="btn btn-primary" onclick="location.href='../users/user-management.php'">
                         <i class="fas fa-user-plus"></i> Add New User
                     </button>
                     <form method="post" style="display:inline;">
@@ -606,7 +633,6 @@ if ($reportType === 'userSummary') {
                                 <th>Batches</th>
                                 <th>Total Balut</th>
                                 <th>Total Chicks</th>
-                            </tr>
                         </thead>
                         <tbody>
                             <?php foreach ($users as $u): ?>
@@ -616,618 +642,572 @@ if ($reportType === 'userSummary') {
                                             <div class="avatar"><?= strtoupper(substr($u['username'], 0, 1)) ?></div>
                                             <div><?= htmlspecialchars($u['username']) ?></div>
                                         </div>
-                                    </td>
-                                    <td><span class="role-badge <?= $u['user_role'] ?>"><?= ucfirst($u['user_role']) ?></span></td>
-                                    <td><?= date('M d, Y', strtotime($u['created_at'])) ?></td>
-                                    <td><?= number_format($u['batch_count']) ?></td>
-                                    <td><strong><?= number_format($u['total_balut']) ?></strong></td>
-                                    <td><?= number_format($u['total_chicks']) ?></td>
-                                </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
                 </div>
-
-                <!-- Activity Logs -->
-                <div class="table-container">
-                    <div class="table-header">
-                        <h3>Recent User Activity</h3>
-                    </div>
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th>Time</th>
-                                <th>User</th>
-                                <th>Action</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php if ($logs): ?>
-                                <?php foreach ($logs as $log): ?>
-                                    <tr>
-                                        <td class="activity-time"><?= timeAgo($log['log_date']) ?></td>
-                                        <td><?= htmlspecialchars($log['username']) ?></td>
-                                        <td><?= htmlspecialchars($log['action']) ?></td>
-                                    </tr>
-                                <?php endforeach; ?>
-                            <?php else: ?>
-                                <tr>
-                                    <td colspan="3" style="text-align:center">No activity logs found</td>
-                                </tr>
-                            <?php endif; ?>
-                        </tbody>
-                    </table>
-                </div>
+                <td><span class="role-badge <?= $u['user_role'] ?>"><?= ucfirst($u['user_role']) ?></span></td>
+                <td><?= date('M d, Y', strtotime($u['created_at'])) ?></td>
+                <td><?= number_format($u['batch_count']) ?>
             </div>
-
-            <!-- ═══════════════ USER MANAGEMENT TAB ═══════════════ -->
-            <div id="users-section" class="tab-section">
-                <div class="action-bar">
-                    <button class="btn btn-primary" onclick="openModal()">
-                        <i class="fas fa-user-plus"></i> Add New User
-                    </button>
-                </div>
-                <div class="table-container">
-                    <div class="table-header">
-                        <h3>All Users</h3>
-                        <div class="search-box">
-                            <input type="text" id="searchUser" placeholder="Search by username…" oninput="filterUsers()">
-                        </div>
-                    </div>
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th>User</th>
-                                <th>Role</th>
-                                <th>Joined</th>
-                                <th>Batches</th>
-                                <th>Total Balut</th>
-                                <th>Total Chicks</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="userTableBody">
-                            <?php foreach ($users as $u): ?>
-                                <tr data-username="<?= strtolower(htmlspecialchars($u['username'])) ?>">
-                                    <td>
-                                        <div class="user-info">
-                                            <div class="avatar"><?= strtoupper(substr($u['username'], 0, 1)) ?></div>
-                                            <div><?= htmlspecialchars($u['username']) ?></div>
-                                        </div>
-                                    </td>
-                                    <td><span class="role-badge <?= $u['user_role'] ?>"><?= ucfirst($u['user_role']) ?></span></td>
-                                    <td><?= date('M d, Y', strtotime($u['created_at'])) ?></td>
-                                    <td><?= number_format($u['batch_count']) ?></td>
-                                    <td><strong><?= number_format($u['total_balut']) ?></strong></td>
-                                    <td><?= number_format($u['total_chicks']) ?></td>
-                                    <td>
-                                        <div class="action-btns">
-                                            <button class="btn btn-warning btn-sm"
-                                                onclick="openEditModal(<?= $u['user_id'] ?>, '<?= addslashes($u['username']) ?>', '<?= $u['user_role'] ?>')">
-                                                <i class="fas fa-edit"></i> Edit
-                                            </button>
-                                            <?php if ($u['user_id'] != $manager_id): ?>
-                                                <button class="btn btn-danger btn-sm"
-                                                    onclick="deleteUser(<?= $u['user_id'] ?>, '<?= addslashes($u['username']) ?>')">
-                                                    <i class="fas fa-trash"></i> Delete
-                                                </button>
-                                            <?php endif; ?>
-                                        </div>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <!-- ═══════════════ ANALYTICS TAB ═══════════════ -->
-            <div id="analytics-section" class="tab-section">
-                <div class="stats-grid" style="margin-bottom:2rem;">
-                    <div class="stat-card">
-                        <div class="stat-info">
-                            <h3>Avg Balut / Batch</h3>
-                            <p><?= $totalBatches > 0 ? number_format($totalBalut / $totalBatches, 1) : '0' ?></p>
-                        </div>
-                        <div class="stat-icon"><i class="fas fa-calculator"></i></div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-info">
-                            <h3>Avg Chicks / Batch</h3>
-                            <p><?= $totalBatches > 0 ? number_format($totalChicks / $totalBatches, 1) : '0' ?></p>
-                        </div>
-                        <div class="stat-icon"><i class="fas fa-dove"></i></div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-info">
-                            <h3>Success Rate</h3>
-                            <p><?= $totalEggs > 0 ? number_format((($totalBalut + $totalChicks) / $totalEggs) * 100, 1) : '0' ?>%</p>
-                        </div>
-                        <div class="stat-icon"><i class="fas fa-percentage"></i></div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-info">
-                            <h3>Failure Rate</h3>
-                            <p><?= $totalEggs > 0 ? number_format(($totalFailed / $totalEggs) * 100, 1) : '0' ?>%</p>
-                        </div>
-                        <div class="stat-icon"><i class="fas fa-exclamation-triangle"></i></div>
-                    </div>
-                </div>
-
-                <div class="chart-row">
-                    <div class="chart-card">
-                        <h3><i class="fas fa-chart-bar" style="color:#10b981;margin-right:.5rem;"></i>Balut per User</h3>
-                        <canvas id="balutChart"></canvas>
-                    </div>
-                    <div class="chart-card">
-                        <h3><i class="fas fa-chart-line" style="color:#3b82f6;margin-right:.5rem;"></i>Weekly Production Trend (Last 7 Days)</h3>
-                        <canvas id="trendChart"></canvas>
-                    </div>
-                </div>
-
-                <div class="chart-row">
-                    <div class="chart-card">
-                        <h3><i class="fas fa-chart-pie" style="color:#f59e0b;margin-right:.5rem;"></i>Outcome Distribution</h3>
-                        <canvas id="pieChart"></canvas>
-                    </div>
-                    <div class="chart-card">
-                        <h3><i class="fas fa-chart-area" style="color:#8b5cf6;margin-right:.5rem;"></i>Batch Status Overview</h3>
-                        <?php
-                        $incubating = $conn->query("SELECT COUNT(*) FROM egg WHERE status='incubating'")->fetchColumn();
-                        $complete   = $conn->query("SELECT COUNT(*) FROM egg WHERE status='complete'")->fetchColumn();
-                        ?>
-                        <canvas id="statusChart"></canvas>
-                        <p style="text-align:center;color:#64748b;font-size:.85rem;margin-top:.75rem;">
-                            Incubating: <strong><?= $incubating ?></strong> &nbsp;|&nbsp; Complete: <strong><?= $complete ?></strong>
-                        </p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- ═══════════════ REPORTS TAB ═══════════════ -->
-            <div id="reports-section" class="tab-section">
-                <div class="report-controls">
-                    <div class="form-group">
-                        <label>Report Type</label>
-                        <select id="reportType">
-                            <option value="userSummary">User Summary</option>
-                            <option value="batchLog">Batch Log</option>
-                            <option value="profitDistribution">Profit Distribution</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>Start Date</label>
-                        <input type="date" id="startDate" value="<?= date('Y-m-01') ?>">
-                    </div>
-                    <div class="form-group">
-                        <label>End Date</label>
-                        <input type="date" id="endDate" value="<?= date('Y-m-d') ?>">
-                    </div>
-                    <button class="btn btn-primary" id="generateReportBtn" onclick="generateReport()">
-                        <i class="fas fa-chart-bar"></i> Generate
-                    </button>
-                    <button class="btn btn-outline" id="exportCsvBtn" onclick="exportCSV()">
-                        <i class="fas fa-file-csv"></i> Export CSV
-                    </button>
-                </div>
-
-                <div class="table-container" id="reportPreview">
-                    <div class="table-header">
-                        <h3 id="reportTitle">Report Preview</h3>
-                    </div>
-                    <div id="reportContent" style="padding:.5rem;color:#64748b;">
-                        Select a report type and click Generate.
-                    </div>
-                </div>
-            </div>
-        </main>
+            <td><strong><?= number_format($u['total_balut']) ?></strong></td>
+            <td><?= number_format($u['total_chicks']) ?>
     </div>
+    </tr>
+<?php endforeach; ?>
+</tbody>
+</table>
+</div>
 
-    <!-- ── Add / Edit User Modal ─────────────────────────────────────── -->
-    <div id="userModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3 id="modalTitle"><i class="fas fa-user-plus"></i> Add New User</h3>
-                <button class="close" onclick="closeModal()">&times;</button>
+<!-- Activity Logs -->
+<div class="table-container">
+    <div class="table-header">
+        <h3>Recent User Activity</h3>
+    </div>
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Time</th>
+                <th>User</th>
+                <th>Action</th>
+        </thead>
+        <tbody>
+            <?php if ($logs): ?>
+                <?php foreach ($logs as $log): ?>
+                    <tr>
+                        <td class="activity-time"><?= timeAgo($log['log_date']) ?></td>
+                        <td><?= htmlspecialchars($log['username']) ?></td>
+                        <td><?= htmlspecialchars($log['action']) ?></td>
+                    </tr>
+                <?php endforeach; ?>
+            <?php else: ?>
+                <tr>
+                    <td colspan="3" style="text-align:center">No activity logs found</td>
+                </tr>
+            <?php endif; ?>
+        </tbody>
+    </table>
+</div>
+</div>
+
+<!-- ═══════════════ ANALYTICS TAB ═══════════════ -->
+<div id="analytics-section" class="tab-section <?= $activeTab == 'analytics' ? 'active' : '' ?>">
+    <div class="stats-grid" style="margin-bottom:2rem;">
+        <div class="stat-card">
+            <div class="stat-info">
+                <h3>Avg Balut / Batch</h3>
+                <p><?= $totalBatches > 0 ? number_format($totalBalut / $totalBatches, 1) : '0' ?></p>
             </div>
-            <form id="userForm" onsubmit="saveUser(event)">
-                <input type="hidden" id="editUserId" value="">
-                <div class="modal-body">
-                    <div class="form-group">
-                        <label>Username</label>
-                        <input type="text" id="modalUsername" name="username" required minlength="3" maxlength="50">
-                    </div>
-                    <div class="form-group">
-                        <label id="passwordLabel">Password</label>
-                        <input type="password" id="modalPassword" name="password" minlength="6">
-                    </div>
-                    <div class="form-group">
-                        <label>Role</label>
-                        <select id="modalRole" name="role">
-                            <option value="user">Regular User</option>
-                            <option value="manager">Manager</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-                    <button type="submit" class="btn btn-primary" id="saveBtn">
-                        <i class="fas fa-save"></i> Save
-                    </button>
-                </div>
-            </form>
+            <div class="stat-icon"><i class="fas fa-calculator"></i></div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-info">
+                <h3>Avg Chicks / Batch</h3>
+                <p><?= $totalBatches > 0 ? number_format($totalChicks / $totalBatches, 1) : '0' ?></p>
+            </div>
+            <div class="stat-icon"><i class="fas fa-dove"></i></div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-info">
+                <h3>Success Rate</h3>
+                <p><?= $totalEggs > 0 ? number_format((($totalBalut + $totalChicks) / $totalEggs) * 100, 1) : '0' ?>%</p>
+            </div>
+            <div class="stat-icon"><i class="fas fa-percentage"></i></div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-info">
+                <h3>Failure Rate</h3>
+                <p><?= $totalEggs > 0 ? number_format(($totalFailed / $totalEggs) * 100, 1) : '0' ?>%</p>
+            </div>
+            <div class="stat-icon"><i class="fas fa-exclamation-triangle"></i></div>
         </div>
     </div>
 
-    <!-- Toast -->
-    <div id="toast"><i class="fas fa-check-circle"></i> <span id="toastMsg"></span></div>
+    <div class="chart-row">
+        <div class="chart-card">
+            <h3><i class="fas fa-chart-bar" style="color:#10b981;margin-right:.5rem;"></i>Balut per User</h3>
+            <canvas id="balutChart"></canvas>
+        </div>
+        <div class="chart-card">
+            <h3><i class="fas fa-chart-line" style="color:#3b82f6;margin-right:.5rem;"></i>Weekly Production Trend (Last 7 Days)</h3>
+            <canvas id="trendChart"></canvas>
+        </div>
+    </div>
 
-    <!-- Chart.js -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-    <script>
-        // ── PHP data bridged to JS ──────────────────────────────────────────────────
-        const PHP = {
-            currentUserId: <?= (int)$_SESSION['user_id'] ?>,
-            balutPerUser: <?= json_encode($balutPerUser) ?>,
-            weeklyTrend: <?= json_encode($weeklyTrend) ?>,
-            totalBalut: <?= (int)$totalBalut ?>,
-            totalChicks: <?= (int)$totalChicks ?>,
-            totalFailed: <?= (int)$totalFailed ?>,
-            incubating: <?= (int)$incubating ?>,
-            complete: <?= (int)$complete ?>,
-        };
+    <div class="chart-row">
+        <div class="chart-card">
+            <h3><i class="fas fa-chart-pie" style="color:#f59e0b;margin-right:.5rem;"></i>Outcome Distribution</h3>
+            <canvas id="pieChart"></canvas>
+        </div>
+        <div class="chart-card">
+            <h3><i class="fas fa-chart-area" style="color:#8b5cf6;margin-right:.5rem;"></i>Batch Status Overview</h3>
+            <canvas id="statusChart"></canvas>
+            <p style="text-align:center;color:#64748b;font-size:.85rem;margin-top:.75rem;">
+                Incubating: <strong><?= $incubating ?></strong> &nbsp;|&nbsp; Complete: <strong><?= $complete ?></strong>
+            </p>
+        </div>
+    </div>
+</div>
 
-        // ── Tab Navigation ──────────────────────────────────────────────────────────
-        const tabTitles = {
-            overview: 'Overview & key metrics',
-            users: 'Manage all users',
-            analytics: 'Production analytics',
-            reports: 'Generate & export reports',
-        };
+<!-- ═══════════════ REPORTS TAB ═══════════════ -->
+<div id="reports-section" class="tab-section <?= $activeTab == 'reports' ? 'active' : '' ?>">
+    <div class="report-controls">
+        <div class="form-group">
+            <label>Report Type</label>
+            <select id="reportType">
+                <option value="userSummary" <?= $reportType == 'userSummary' ? 'selected' : '' ?>>User Summary</option>
+                <option value="batchLog" <?= $reportType == 'batchLog' ? 'selected' : '' ?>>Batch Log</option>
+                <option value="profitDistribution" <?= $reportType == 'profitDistribution' ? 'selected' : '' ?>>Profit Distribution</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Start Date</label>
+            <input type="date" id="startDate" value="<?= $startDate ?>">
+        </div>
+        <div class="form-group">
+            <label>End Date</label>
+            <input type="date" id="endDate" value="<?= $endDate ?>">
+        </div>
+        <button class="btn btn-primary" id="generateReportBtn" onclick="generateReport()">
+            <i class="fas fa-chart-bar"></i> Generate
+        </button>
+        <button class="btn btn-outline" id="exportCsvBtn" onclick="exportCSV()">
+            <i class="fas fa-file-csv"></i> Export CSV
+        </button>
+    </div>
 
-        document.querySelectorAll('.nav-item[data-tab]').forEach(li => {
-            li.querySelector('a').addEventListener('click', e => {
-                e.preventDefault();
-                const tab = li.dataset.tab;
-                document.querySelectorAll('.nav-item').forEach(x => x.classList.remove('active'));
-                li.classList.add('active');
-                document.querySelectorAll('.tab-section').forEach(s => s.classList.remove('active'));
-                document.getElementById(tab + '-section').classList.add('active');
-                document.getElementById('page-subtitle').textContent = tabTitles[tab] ?? '';
-                if (tab === 'analytics') initCharts();
+    <div class="table-container" id="reportPreview">
+        <div class="table-header">
+            <h3 id="reportTitle">Report Preview</h3>
+        </div>
+        <div id="reportContent" style="padding:.5rem;color:#64748b;">
+            <?php if ($reportData): ?>
+                <?php
+                $titles = [
+                    'userSummary' => 'User Summary Report',
+                    'batchLog' => 'Batch Log Report',
+                    'profitDistribution' => 'Profit Distribution Report',
+                ];
+                $title = $titles[$reportType] ?? 'Report';
+                echo "<script>document.getElementById('reportTitle').innerHTML = '" . $title . "';</script>";
+                ?>
+                <div style="overflow-x:auto">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <?php foreach (array_keys($reportData[0]) as $col): ?>
+                                    <th><?= ucwords(str_replace('_', ' ', $col)) ?></th>
+                                <?php endforeach; ?>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($reportData as $row): ?>
+                                <tr>
+                                    <?php foreach ($row as $value): ?>
+                                        <td><?= htmlspecialchars($value ?? '') ?></td>
+                                    <?php endforeach; ?>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            <?php else: ?>
+                Select a report type and click Generate.
+            <?php endif; ?>
+        </div>
+    </div>
+</div>
+</main>
+</div>
+
+<!-- ── Add / Edit User Modal ─────────────────────────────────────── -->
+<div id="userModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 id="modalTitle"><i class="fas fa-user-plus"></i> Add New User</h3>
+            <button class="close" onclick="closeModal()">&times;</button>
+        </div>
+        <form id="userForm" onsubmit="saveUser(event)">
+            <input type="hidden" id="editUserId" value="">
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Username</label>
+                    <input type="text" id="modalUsername" name="username" required minlength="3" maxlength="50">
+                </div>
+                <div class="form-group">
+                    <label id="passwordLabel">Password</label>
+                    <input type="password" id="modalPassword" name="password" minlength="6">
+                </div>
+                <div class="form-group">
+                    <label>Role</label>
+                    <select id="modalRole" name="role">
+                        <option value="user">Regular User</option>
+                        <option value="manager">Manager</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary" id="saveBtn">
+                    <i class="fas fa-save"></i> Save
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Toast -->
+<div id="toast"><i class="fas fa-check-circle"></i> <span id="toastMsg"></span></div>
+
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+    // ── PHP data bridged to JS ──────────────────────────────────────────────────
+    const PHP = {
+        currentUserId: <?= (int)$_SESSION['user_id'] ?>,
+        balutPerUser: <?= json_encode($balutPerUser) ?>,
+        weeklyTrend: <?= json_encode($weeklyTrend) ?>,
+        totalBalut: <?= (int)$totalBalut ?>,
+        totalChicks: <?= (int)$totalChicks ?>,
+        totalFailed: <?= (int)$totalFailed ?>,
+        incubating: <?= (int)$incubating ?>,
+        complete: <?= (int)$complete ?>,
+    };
+
+    // ── Tab Navigation ──────────────────────────────────────────────────────────
+    const tabTitles = {
+        overview: 'Overview & key metrics',
+        analytics: 'Production analytics',
+        reports: 'Generate & export reports',
+    };
+
+    // Handle tab clicks for analytics and reports tabs
+    document.querySelectorAll('.nav-item[data-tab]').forEach(li => {
+        li.querySelector('a').addEventListener('click', (e) => {
+            e.preventDefault();
+            const tab = li.dataset.tab;
+
+            // Update URL without page reload
+            const url = new URL(window.location.href);
+            url.searchParams.set('tab', tab);
+            window.history.pushState({}, '', url);
+
+            // Update active states
+            document.querySelectorAll('.nav-item').forEach(x => x.classList.remove('active'));
+            li.classList.add('active');
+            document.querySelectorAll('.tab-section').forEach(s => s.classList.remove('active'));
+            document.getElementById(tab + '-section').classList.add('active');
+            document.getElementById('page-subtitle').textContent = tabTitles[tab] ?? '';
+
+            if (tab === 'analytics') initCharts();
+        });
+    });
+
+    // Handle browser back/forward buttons
+    window.addEventListener('popstate', () => {
+        const params = new URLSearchParams(window.location.search);
+        const tab = params.get('tab') || 'overview';
+
+        document.querySelectorAll('.nav-item').forEach(x => x.classList.remove('active'));
+        document.querySelector(`.nav-item[data-tab="${tab}"]`).classList.add('active');
+        document.querySelectorAll('.tab-section').forEach(s => s.classList.remove('active'));
+        document.getElementById(tab + '-section').classList.add('active');
+        document.getElementById('page-subtitle').textContent = tabTitles[tab] ?? '';
+
+        if (tab === 'analytics') initCharts();
+    });
+
+    // ── Modal ────────────────────────────────────────────────────────────────────
+    function openModal() {
+        document.getElementById('modalTitle').innerHTML = '<i class="fas fa-user-plus"></i> Add New User';
+        document.getElementById('editUserId').value = '';
+        document.getElementById('modalUsername').value = '';
+        document.getElementById('modalPassword').value = '';
+        document.getElementById('modalRole').value = 'user';
+        document.getElementById('passwordLabel').textContent = 'Password';
+        document.getElementById('modalPassword').required = true;
+        document.getElementById('userModal').classList.add('active');
+    }
+
+    function openEditModal(id, username, role) {
+        document.getElementById('modalTitle').innerHTML = '<i class="fas fa-edit"></i> Edit User';
+        document.getElementById('editUserId').value = id;
+        document.getElementById('modalUsername').value = username;
+        document.getElementById('modalPassword').value = '';
+        document.getElementById('modalRole').value = role;
+        document.getElementById('passwordLabel').textContent = 'Password (leave blank to keep unchanged)';
+        document.getElementById('modalPassword').required = false;
+        document.getElementById('userModal').classList.add('active');
+    }
+
+    function closeModal() {
+        document.getElementById('userModal').classList.remove('active');
+    }
+
+    // ── Save User (create/edit) ──────────────────────────────────────────────────
+    function saveUser(e) {
+        e.preventDefault();
+        const id = document.getElementById('editUserId').value;
+        const username = document.getElementById('modalUsername').value.trim();
+        const password = document.getElementById('modalPassword').value;
+        const role = document.getElementById('modalRole').value;
+        const action = id ? 'edit_user' : 'create_user';
+        const btn = document.getElementById('saveBtn');
+
+        const body = new FormData();
+        body.append('action', action);
+        body.append('username', username);
+        body.append('password', password);
+        body.append('role', role);
+        if (id) body.append('user_id', id);
+
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner"></span> Saving…';
+
+        fetch(window.location.href, {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body
+            })
+            .then(r => r.json())
+            .then(res => {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-save"></i> Save';
+                if (res.success) {
+                    closeModal();
+                    showToast(res.message, 'success');
+                    setTimeout(() => location.reload(), 1200);
+                } else {
+                    showToast(res.message, 'error');
+                }
+            })
+            .catch(() => {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-save"></i> Save';
+                showToast('Something went wrong.', 'error');
             });
+    }
+
+    // ── Delete User ───────────────────────────────────────────────────────────────
+    function deleteUser(id, username) {
+        if (!confirm(`Delete user "${username}"? This cannot be undone.`)) return;
+        const body = new FormData();
+        body.append('action', 'delete_user');
+        body.append('user_id', id);
+        fetch(window.location.href, {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body
+            })
+            .then(r => r.json())
+            .then(res => {
+                if (res.success) {
+                    showToast(res.message, 'success');
+                    setTimeout(() => location.reload(), 1000);
+                } else {
+                    showToast(res.message, 'error');
+                }
+            });
+    }
+
+    // ── Search / Filter ───────────────────────────────────────────────────────────
+    function filterUsers() {
+        const q = document.getElementById('searchUser')?.value.toLowerCase();
+        if (q) {
+            document.querySelectorAll('#userTableBody tr').forEach(row => {
+                row.style.display = row.dataset.username?.includes(q) ? '' : 'none';
+            });
+        }
+    }
+
+    // ── Toast ─────────────────────────────────────────────────────────────────────
+    function showToast(msg, type = 'success') {
+        const toast = document.getElementById('toast');
+        document.getElementById('toastMsg').textContent = msg;
+        toast.className = 'show ' + type;
+        setTimeout(() => toast.className = '', 3000);
+    }
+
+    // ── Reports ───────────────────────────────────────────────────────────────────
+    let reportRows = [];
+
+    function generateReport() {
+        const type = document.getElementById('reportType').value;
+        const start = document.getElementById('startDate').value;
+        const end = document.getElementById('endDate').value;
+
+        window.location.href = `?tab=reports&report=${type}&start=${start}&end=${end}`;
+    }
+
+    function exportCSV() {
+        const table = document.querySelector('#reportContent table');
+        if (!table) {
+            showToast('Generate a report first.', 'error');
+            return;
+        }
+
+        let csv = [];
+        // Get headers
+        const headers = [];
+        table.querySelectorAll('thead th').forEach(th => {
+            headers.push(th.innerText);
+        });
+        csv.push(headers.join(','));
+
+        // Get rows
+        table.querySelectorAll('tbody tr').forEach(tr => {
+            const row = [];
+            tr.querySelectorAll('td').forEach(td => {
+                row.push('"' + td.innerText.replace(/"/g, '""') + '"');
+            });
+            csv.push(row.join(','));
         });
 
-        // ── Modal ────────────────────────────────────────────────────────────────────
-        function openModal() {
-            document.getElementById('modalTitle').innerHTML = '<i class="fas fa-user-plus"></i> Add New User';
-            document.getElementById('editUserId').value = '';
-            document.getElementById('modalUsername').value = '';
-            document.getElementById('modalPassword').value = '';
-            document.getElementById('modalRole').value = 'user';
-            document.getElementById('passwordLabel').textContent = 'Password';
-            document.getElementById('modalPassword').required = true;
-            document.getElementById('userModal').classList.add('active');
-        }
+        const blob = new Blob([csv.join('\n')], {
+            type: 'text/csv'
+        });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `report_${Date.now()}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast('Report exported successfully!', 'success');
+    }
 
-        function openEditModal(id, username, role) {
-            document.getElementById('modalTitle').innerHTML = '<i class="fas fa-edit"></i> Edit User';
-            document.getElementById('editUserId').value = id;
-            document.getElementById('modalUsername').value = username;
-            document.getElementById('modalPassword').value = '';
-            document.getElementById('modalRole').value = role;
-            document.getElementById('passwordLabel').textContent = 'Password (leave blank to keep unchanged)';
-            document.getElementById('modalPassword').required = false;
-            document.getElementById('userModal').classList.add('active');
-        }
+    // ── Charts ────────────────────────────────────────────────────────────────────
+    let chartsInitialized = false;
 
-        function closeModal() {
-            document.getElementById('userModal').classList.remove('active');
-        }
+    function initCharts() {
+        if (chartsInitialized) return;
+        chartsInitialized = true;
 
-        // ── Save User (create/edit) ──────────────────────────────────────────────────
-        function saveUser(e) {
-            e.preventDefault();
-            const id = document.getElementById('editUserId').value;
-            const username = document.getElementById('modalUsername').value.trim();
-            const password = document.getElementById('modalPassword').value;
-            const role = document.getElementById('modalRole').value;
-            const action = id ? 'edit_user' : 'create_user';
-            const btn = document.getElementById('saveBtn');
-
-            const body = new FormData();
-            body.append('action', action);
-            body.append('username', username);
-            body.append('password', password);
-            body.append('role', role);
-            if (id) body.append('user_id', id);
-
-            btn.disabled = true;
-            btn.innerHTML = '<span class="spinner"></span> Saving…';
-
-            fetch(window.location.href, {
-                    method: 'POST',
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest'
-                    },
-                    body
-                })
-                .then(r => r.json())
-                .then(res => {
-                    btn.disabled = false;
-                    btn.innerHTML = '<i class="fas fa-save"></i> Save';
-                    if (res.success) {
-                        closeModal();
-                        showToast(res.message, 'success');
-                        setTimeout(() => location.reload(), 1200);
-                    } else {
-                        showToast(res.message, 'error');
+        // Balut per User bar chart
+        new Chart(document.getElementById('balutChart'), {
+            type: 'bar',
+            data: {
+                labels: PHP.balutPerUser.map(r => r.username),
+                datasets: [{
+                    label: 'Total Balut',
+                    data: PHP.balutPerUser.map(r => parseInt(r.total_balut)),
+                    backgroundColor: 'rgba(16,185,129,.7)',
+                    borderColor: '#10b981',
+                    borderWidth: 2,
+                    borderRadius: 8,
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        display: false
                     }
-                })
-                .catch(() => {
-                    btn.disabled = false;
-                    btn.innerHTML = '<i class="fas fa-save"></i> Save';
-                    showToast('Something went wrong.', 'error');
-                });
-        }
-
-        // ── Delete User ───────────────────────────────────────────────────────────────
-        function deleteUser(id, username) {
-            if (!confirm(`Delete user "${username}"? This cannot be undone.`)) return;
-            const body = new FormData();
-            body.append('action', 'delete_user');
-            body.append('user_id', id);
-            fetch(window.location.href, {
-                    method: 'POST',
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest'
-                    },
-                    body
-                })
-                .then(r => r.json())
-                .then(res => {
-                    if (res.success) {
-                        showToast(res.message, 'success');
-                        setTimeout(() => location.reload(), 1000);
-                    } else {
-                        showToast(res.message, 'error');
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        grid: {
+                            color: '#f1f5f9'
+                        }
                     }
-                });
-        }
-
-        // ── Search / Filter ───────────────────────────────────────────────────────────
-        function filterUsers() {
-            const q = document.getElementById('searchUser').value.toLowerCase();
-            document.querySelectorAll('#userTableBody tr').forEach(row => {
-                row.style.display = row.dataset.username.includes(q) ? '' : 'none';
-            });
-        }
-
-        // ── Toast ─────────────────────────────────────────────────────────────────────
-        function showToast(msg, type = 'success') {
-            const toast = document.getElementById('toast');
-            document.getElementById('toastMsg').textContent = msg;
-            toast.className = 'show ' + type;
-            setTimeout(() => toast.className = '', 3000);
-        }
-
-        // ── Reports ───────────────────────────────────────────────────────────────────
-        let reportRows = [];
-
-        function generateReport() {
-            const type = document.getElementById('reportType').value;
-            const start = document.getElementById('startDate').value;
-            const end = document.getElementById('endDate').value;
-            const btn = document.getElementById('generateReportBtn');
-
-            btn.disabled = true;
-            btn.innerHTML = '<span class="spinner"></span> Generating…';
-
-            fetch(`?report=${type}&start=${start}&end=${end}`, {
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest'
-                    }
-                })
-                .then(() => {
-                    // Reload page with report params to get PHP-rendered data
-                    window.location.href = `?report=${type}&start=${start}&end=${end}#reports`;
-                });
-        }
-
-        // Render report if data exists (PHP already queried it)
-        (function() {
-            const type = new URLSearchParams(location.search).get('report');
-            if (!type) return;
-
-            // Switch to reports tab
-            document.querySelectorAll('.nav-item').forEach(x => x.classList.remove('active'));
-            document.querySelectorAll('.tab-section').forEach(s => s.classList.remove('active'));
-            document.getElementById('reports-section').classList.add('active');
-            document.querySelector('[data-tab="reports"]')?.classList.add('active');
-            document.getElementById('page-subtitle').textContent = 'Generate & export reports';
-            document.getElementById('reportType').value = type;
-
-            const start = new URLSearchParams(location.search).get('start') || '';
-            const end = new URLSearchParams(location.search).get('end') || '';
-            if (start) document.getElementById('startDate').value = start;
-            if (end) document.getElementById('endDate').value = end;
-
-            <?php if ($reportData): ?>
-                const data = <?= json_encode($reportData) ?>;
-                reportRows = data;
-                renderReportTable(data, type);
-            <?php endif; ?>
-        })();
-
-        function renderReportTable(data, type) {
-            const titles = {
-                userSummary: 'User Summary Report',
-                batchLog: 'Batch Log Report',
-                profitDistribution: 'Profit Distribution Report',
-            };
-            document.getElementById('reportTitle').textContent = titles[type] ?? 'Report';
-
-            if (!data.length) {
-                document.getElementById('reportContent').innerHTML = '<p style="color:#64748b;padding:.5rem">No data found for the selected range.</p>';
-                return;
+                }
             }
+        });
 
-            const cols = Object.keys(data[0]);
-            let html = `<div style="overflow-x:auto"><table class="data-table"><thead><tr>`;
-            cols.forEach(c => html += `<th>${c.replace(/_/g,' ').replace(/\b\w/g,l=>l.toUpperCase())}</th>`);
-            html += '</tr></thead><tbody>';
-            data.forEach(row => {
-                html += '<tr>';
-                cols.forEach(c => html += `<td>${row[c] ?? ''}</td>`);
-                html += '</tr>';
-            });
-            html += '</tbody></table></div>';
-            document.getElementById('reportContent').innerHTML = html;
-        }
-
-        function exportCSV() {
-            if (!reportRows.length) {
-                showToast('Generate a report first.', 'error');
-                return;
-            }
-            const cols = Object.keys(reportRows[0]);
-            let csv = cols.join(',') + '\n';
-            reportRows.forEach(row => {
-                csv += cols.map(c => `"${(row[c] ?? '').toString().replace(/"/g,'""')}"`).join(',') + '\n';
-            });
-            const a = document.createElement('a');
-            a.href = 'data:text/csv,' + encodeURIComponent(csv);
-            a.download = 'report_' + Date.now() + '.csv';
-            a.click();
-        }
-
-        // ── Charts ────────────────────────────────────────────────────────────────────
-        let chartsInitialized = false;
-
-        function initCharts() {
-            if (chartsInitialized) return;
-            chartsInitialized = true;
-
-            // Balut per User bar chart
-            new Chart(document.getElementById('balutChart'), {
-                type: 'bar',
-                data: {
-                    labels: PHP.balutPerUser.map(r => r.username),
-                    datasets: [{
-                        label: 'Total Balut',
-                        data: PHP.balutPerUser.map(r => parseInt(r.total_balut)),
-                        backgroundColor: 'rgba(16,185,129,.7)',
+        // Weekly trend line chart
+        const labels = PHP.weeklyTrend.map(r => r.day);
+        new Chart(document.getElementById('trendChart'), {
+            type: 'line',
+            data: {
+                labels,
+                datasets: [{
+                        label: 'Balut',
+                        data: PHP.weeklyTrend.map(r => +r.balut),
                         borderColor: '#10b981',
-                        borderWidth: 2,
-                        borderRadius: 8,
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    plugins: {
-                        legend: {
-                            display: false
-                        }
+                        backgroundColor: 'rgba(16,185,129,.1)',
+                        fill: true,
+                        tension: .4
                     },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            grid: {
-                                color: '#f1f5f9'
-                            }
+                    {
+                        label: 'Chicks',
+                        data: PHP.weeklyTrend.map(r => +r.chicks),
+                        borderColor: '#3b82f6',
+                        backgroundColor: 'rgba(59,130,246,.1)',
+                        fill: true,
+                        tension: .4
+                    },
+                    {
+                        label: 'Failed',
+                        data: PHP.weeklyTrend.map(r => +r.failed),
+                        borderColor: '#ef4444',
+                        backgroundColor: 'rgba(239,68,68,.1)',
+                        fill: true,
+                        tension: .4
+                    },
+                ]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        grid: {
+                            color: '#f1f5f9'
                         }
                     }
                 }
-            });
+            }
+        });
 
-            // Weekly trend line chart
-            const labels = PHP.weeklyTrend.map(r => r.day);
-            new Chart(document.getElementById('trendChart'), {
-                type: 'line',
-                data: {
-                    labels,
-                    datasets: [{
-                            label: 'Balut',
-                            data: PHP.weeklyTrend.map(r => +r.balut),
-                            borderColor: '#10b981',
-                            backgroundColor: 'rgba(16,185,129,.1)',
-                            fill: true,
-                            tension: .4
-                        },
-                        {
-                            label: 'Chicks',
-                            data: PHP.weeklyTrend.map(r => +r.chicks),
-                            borderColor: '#3b82f6',
-                            backgroundColor: 'rgba(59,130,246,.1)',
-                            fill: true,
-                            tension: .4
-                        },
-                        {
-                            label: 'Failed',
-                            data: PHP.weeklyTrend.map(r => +r.failed),
-                            borderColor: '#ef4444',
-                            backgroundColor: 'rgba(239,68,68,.1)',
-                            fill: true,
-                            tension: .4
-                        },
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            grid: {
-                                color: '#f1f5f9'
-                            }
-                        }
+        // Pie chart
+        new Chart(document.getElementById('pieChart'), {
+            type: 'doughnut',
+            data: {
+                labels: ['Balut', 'Chicks', 'Failed'],
+                datasets: [{
+                    data: [PHP.totalBalut, PHP.totalChicks, PHP.totalFailed],
+                    backgroundColor: ['#10b981', '#3b82f6', '#ef4444'],
+                    borderWidth: 2,
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
                     }
                 }
-            });
+            }
+        });
 
-            // Pie chart
-            new Chart(document.getElementById('pieChart'), {
-                type: 'doughnut',
-                data: {
-                    labels: ['Balut', 'Chicks', 'Failed'],
-                    datasets: [{
-                        data: [PHP.totalBalut, PHP.totalChicks, PHP.totalFailed],
-                        backgroundColor: ['#10b981', '#3b82f6', '#ef4444'],
-                        borderWidth: 2,
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    plugins: {
-                        legend: {
-                            position: 'bottom'
-                        }
+        // Status doughnut
+        new Chart(document.getElementById('statusChart'), {
+            type: 'doughnut',
+            data: {
+                labels: ['Incubating', 'Complete'],
+                datasets: [{
+                    data: [PHP.incubating, PHP.complete],
+                    backgroundColor: ['#f59e0b', '#10b981'],
+                    borderWidth: 2,
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
                     }
                 }
-            });
+            }
+        });
+    }
 
-            // Status doughnut
-            new Chart(document.getElementById('statusChart'), {
-                type: 'doughnut',
-                data: {
-                    labels: ['Incubating', 'Complete'],
-                    datasets: [{
-                        data: [PHP.incubating, PHP.complete],
-                        backgroundColor: ['#f59e0b', '#10b981'],
-                        borderWidth: 2,
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    plugins: {
-                        legend: {
-                            position: 'bottom'
-                        }
-                    }
-                }
-            });
-        }
-    </script>
+    // Initialize charts if analytics tab is active
+    if ('<?= $activeTab ?>' === 'analytics') {
+        initCharts();
+    }
+</script>
 </body>
 
 </html>
