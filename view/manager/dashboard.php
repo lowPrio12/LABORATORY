@@ -1514,10 +1514,10 @@ $topUsers = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                     <div class="avatar"><?= strtoupper(substr($user['username'], 0, 1)) ?></div><?= htmlspecialchars($user['username']) ?>
                                 </div>
         </div>
-        <td><strong><?= number_format($user['total_balut']) ?></strong>\(c)
-        <td><?= number_format($user['total_chicks']) ?>\(c)
-        <td><?= number_format($user['total_failed']) ?>\(c)
-        <td><?= $successRate ?>%\(c)
+        <td><strong><?= number_format($user['total_balut']) ?></strong>
+        <td><?= number_format($user['total_chicks']) ?>
+        <td><?= number_format($user['total_failed']) ?>
+        <td><?= $successRate ?>%
             </tr>
         <?php endforeach; ?>
         <?php if (empty($userContributions)): ?>
