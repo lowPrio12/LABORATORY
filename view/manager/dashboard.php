@@ -47,6 +47,31 @@ $stmt->execute([$manager_id, "Manager accessed dashboard"]);
 // ── Handle AJAX / POST actions ──────────────────────────────────────────────
 $isAjax = isset($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
 
+// Handle AJAX activity refresh
+if ($isAjax && isset($_GET['get_activity_ajax'])) {
+    $stmt = $conn->prepare("
+        SELECT l.log_date, u.username, l.action
+        FROM user_activity_logs l
+        JOIN users u ON l.user_id = u.user_id
+        WHERE l.log_date IS NOT NULL
+        ORDER BY l.log_date DESC
+        LIMIT 10
+    ");
+    $stmt->execute();
+    $freshLogs = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $logsData = [];
+    foreach ($freshLogs as $log) {
+        $logsData[] = [
+            'formatted_date' => formatDateTime($log['log_date']),
+            'time_ago' => timeAgo($log['log_date']),
+            'username' => $log['username'],
+            'action' => $log['action']
+        ];
+    }
+    echo json_encode(['logs' => $logsData]);
+    exit;
+}
+
 // Create user
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'create_user') {
     $username = trim($_POST['username'] ?? '');
@@ -134,6 +159,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['distribute_profits'])
     $distribution_message = "Profits distributed successfully!";
 }
 
+// Handle activity log export
+if (isset($_GET['export_activity']) && $_GET['export_activity'] === 'csv') {
+    // Fetch all activity logs for export (no limit)
+    $stmt = $conn->prepare("
+        SELECT l.log_date, u.username, l.action
+        FROM user_activity_logs l
+        JOIN users u ON l.user_id = u.user_id
+        WHERE l.log_date IS NOT NULL
+        ORDER BY l.log_date DESC
+    ");
+    $stmt->execute();
+    $allLogs = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // Set headers for CSV download
+    header('Content-Type: text/csv; charset=utf-8');
+    header('Content-Disposition: attachment; filename="activity_logs_' . date('Y-m-d') . '.csv"');
+
+    $output = fopen('php://output', 'w');
+    // Add UTF-8 BOM for Excel compatibility
+    fprintf($output, chr(0xEF) . chr(0xBB) . chr(0xBF));
+    // Headers
+    fputcsv($output, ['Date & Time', 'User', 'Action']);
+    // Data rows
+    foreach ($allLogs as $log) {
+        fputcsv($output, [
+            formatDateTime($log['log_date']),
+            $log['username'],
+            $log['action']
+        ]);
+    }
+    fclose($output);
+    exit;
+}
+
 // ── Fetch statistics ─────────────────────────────────────────────────────────
 $totalUsers   = $conn->query("SELECT COUNT(*) FROM users")->fetchColumn();
 $totalBatches = $conn->query("SELECT COUNT(*) FROM egg")->fetchColumn();
@@ -157,14 +216,14 @@ $stmt = $conn->prepare("
 $stmt->execute();
 $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// ── Activity logs with proper datetime ───────────────────────────────────────
+// ── Activity logs with proper datetime - LIMIT to 10 rows for real-time display ──
 $stmt = $conn->prepare("
     SELECT l.*, u.username
     FROM user_activity_logs l
     JOIN users u ON l.user_id = u.user_id
     WHERE l.log_date IS NOT NULL
     ORDER BY l.log_date DESC
-    LIMIT 20
+    LIMIT 10
 ");
 $stmt->execute();
 $logs = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -282,12 +341,14 @@ $topUsers = $stmt->fetchAll(PDO::FETCH_ASSOC);
             background: #f1f5f9;
             color: #1e293b;
             font-size: 13px;
+            overflow-x: hidden;
         }
 
         /* ── Dashboard Layout ── */
         .dashboard {
             display: flex;
             min-height: 100vh;
+            overflow-x: hidden;
         }
 
         /* ── Sidebar - Compact & Responsive ── */
@@ -377,6 +438,8 @@ $topUsers = $stmt->fetchAll(PDO::FETCH_ASSOC);
             margin-left: 240px;
             padding: 1rem;
             transition: margin-left 0.3s ease;
+            width: calc(100% - 240px);
+            overflow-x: auto;
         }
 
         /* Top Bar - Compact */
@@ -534,10 +597,13 @@ $topUsers = $stmt->fetchAll(PDO::FETCH_ASSOC);
             padding: 0.85rem;
             margin-bottom: 1rem;
             box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+            width: 100%;
+            overflow-x: auto;
         }
 
-        /* Scrollable table wrapper */
+        /* Scrollable table wrapper - HORIZONTAL SCROLL FIX */
         .table-scroll-wrapper {
+            width: 100%;
             overflow-x: auto;
             overflow-y: visible;
             -webkit-overflow-scrolling: touch;
@@ -546,8 +612,8 @@ $topUsers = $stmt->fetchAll(PDO::FETCH_ASSOC);
         }
 
         .table-scroll-wrapper::-webkit-scrollbar {
-            height: 5px;
-            width: 5px;
+            height: 6px;
+            width: 6px;
         }
 
         .table-scroll-wrapper::-webkit-scrollbar-track {
@@ -561,6 +627,34 @@ $topUsers = $stmt->fetchAll(PDO::FETCH_ASSOC);
         }
 
         .table-scroll-wrapper::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+
+        /* Fixed height scrollable wrapper for activity log - VERTICAL SCROLL */
+        .activity-scroll-wrapper {
+            max-height: 400px;
+            overflow-y: auto;
+            overflow-x: auto;
+            scrollbar-width: thin;
+            scrollbar-color: #cbd5e1 #f1f5f9;
+        }
+
+        .activity-scroll-wrapper::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+
+        .activity-scroll-wrapper::-webkit-scrollbar-track {
+            background: #f1f5f9;
+            border-radius: 10px;
+        }
+
+        .activity-scroll-wrapper::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 10px;
+        }
+
+        .activity-scroll-wrapper::-webkit-scrollbar-thumb:hover {
             background: #94a3b8;
         }
 
@@ -590,7 +684,7 @@ $topUsers = $stmt->fetchAll(PDO::FETCH_ASSOC);
             width: 100%;
             font-size: 0.75rem;
             border-collapse: collapse;
-            min-width: 500px;
+            min-width: 600px;
         }
 
         .data-table th {
@@ -600,11 +694,22 @@ $topUsers = $stmt->fetchAll(PDO::FETCH_ASSOC);
             font-weight: 600;
             color: #64748b;
             border-bottom: 2px solid #e2e8f0;
+            background: white;
+            white-space: nowrap;
         }
 
         .data-table td {
             padding: 0.5rem 0.5rem;
             border-bottom: 1px solid #f1f5f9;
+            white-space: nowrap;
+        }
+
+        /* For smaller screens, allow text wrapping on some cells */
+        @media (max-width: 768px) {
+            .data-table td {
+                white-space: normal;
+                word-break: break-word;
+            }
         }
 
         /* Report Controls - Compact */
@@ -714,6 +819,7 @@ $topUsers = $stmt->fetchAll(PDO::FETCH_ASSOC);
             display: flex;
             align-items: center;
             gap: 0.4rem;
+            white-space: nowrap;
         }
 
         .avatar {
@@ -727,12 +833,14 @@ $topUsers = $stmt->fetchAll(PDO::FETCH_ASSOC);
             justify-content: center;
             font-size: 0.7rem;
             font-weight: 600;
+            flex-shrink: 0;
         }
 
         /* Activity time styling */
         .activity-time {
             font-size: 0.7rem;
             color: #64748b;
+            white-space: nowrap;
         }
 
         .activity-time i {
@@ -992,6 +1100,7 @@ $topUsers = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 margin-left: 0;
                 padding: 0.85rem;
                 padding-top: 3.5rem;
+                width: 100%;
             }
 
             .stats-grid {
@@ -1065,6 +1174,10 @@ $topUsers = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 text-align: center;
                 justify-content: center;
             }
+
+            .data-table {
+                min-width: 500px;
+            }
         }
 
         @media (max-width: 480px) {
@@ -1079,11 +1192,6 @@ $topUsers = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
             .table-container {
                 padding: 0.65rem;
-            }
-
-            .data-table {
-                font-size: 0.7rem;
-                min-width: 450px;
             }
 
             .data-table th,
@@ -1199,7 +1307,7 @@ $topUsers = $stmt->fetchAll(PDO::FETCH_ASSOC);
                     </div>
                 </div>
 
-                <!-- Users Summary Table - Scrollable -->
+                <!-- Users Summary Table - Scrollable horizontally -->
                 <div class="table-container">
                     <div class="table-header">
                         <h3><i class="fas fa-users"></i> Users & Balut Summary</h3>
@@ -1225,162 +1333,161 @@ $topUsers = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                                 <div><?= htmlspecialchars($u['username']) ?></div>
                                             </div>
                     </div>
-                    <td><span class="role-badge <?= $u['user_role'] ?>"><?= ucfirst($u['user_role']) ?></span></td>
+                    <td><span class="role-badge <?= $u['user_role'] ?>"><?= ucfirst($u['user_role']) ?></span>
                     <td><?= date('M d, Y', strtotime($u['created_at'])) ?>
+                    <td><?= number_format($u['batch_count']) ?>
+                    <td><strong><?= number_format($u['total_balut']) ?></strong>
+                    <td><?= number_format($u['total_chicks']) ?>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                    </table>
                 </div>
-                <td><?= number_format($u['batch_count']) ?>
             </div>
-            <td><strong><?= number_format($u['total_balut']) ?></strong>
-    </div>
-    <td><?= number_format($u['total_chicks']) ?></div>
-        </tr>
-    <?php endforeach; ?>
-    </tbody>
-    </table>
-    </div>
-    </div>
 
-    <!-- Activity Logs Table - Scrollable with Real Time -->
-    <div class="table-container">
-        <div class="table-header">
-            <h3><i class="fas fa-history"></i> Recent Activity (Real Time)</h3>
-        </div>
-        <div class="table-scroll-wrapper">
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>Date & Time</th>
-                        <th>User</th>
-                        <th>Action</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php if ($logs): ?>
-                        <?php foreach ($logs as $log): ?>
+            <!-- Activity Logs Table - Scrollable with Real Time (LIMIT 10 rows, scrollable, with export button) -->
+            <div class="table-container">
+                <div class="table-header">
+                    <h3><i class="fas fa-history"></i> Recent Activity - Last 10 logs</h3>
+                    <button class="btn btn-outline" onclick="exportActivityCSV()">
+                        <i class="fas fa-download"></i> Export All Logs
+                    </button>
+                </div>
+                <div class="activity-scroll-wrapper">
+                    <table class="data-table">
+                        <thead>
                             <tr>
-                                <td class="activity-time">
-                                    <i class="far fa-clock"></i> <?= formatDateTime($log['log_date']) ?>
-                                    <small>(<?= timeAgo($log['log_date']) ?>)</small>
-        </div>
-    <td><?= htmlspecialchars($log['username']) ?></div>
-    <td><?= htmlspecialchars($log['action']) ?></div>
-        </tr>
-    <?php endforeach; ?>
-<?php else: ?>
-    <tr>
-        <td colspan="3" style="text-align:center">No activity logs found</div>
-    </tr>
-<?php endif; ?>
-</tbody>
-</table>
-</div>
-</div>
-</div>
-
-<!-- ═══════════════ ANALYTICS TAB ═══════════════ -->
-<div id="analytics-section" class="tab-section <?= $activeTab == 'analytics' ? 'active' : '' ?>">
-    <div class="stats-grid" style="margin-bottom:1rem;">
-        <div class="stat-card">
-            <div class="stat-info">
-                <h3>Avg Balut/Batch</h3>
-                <p><?= $totalBatches > 0 ? number_format($totalBalut / $totalBatches, 1) : '0' ?></p>
+                                <th>Date & Time</th>
+                                <th>User</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="activityLogsBody">
+                            <?php if ($logs): ?>
+                                <?php foreach ($logs as $log): ?>
+                                    <tr>
+                                        <td class="activity-time">
+                                            <i class="far fa-clock"></i> <?= formatDateTime($log['log_date']) ?>
+                                            <small>(<?= timeAgo($log['log_date']) ?>)</small>
+                                        </td>
+                                        <td><?= htmlspecialchars($log['username']) ?></td>
+                                        <td><?= htmlspecialchars($log['action']) ?></td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <tr>
+                                    <td colspan="3" style="text-align:center">No activity logs found</td>
+                                </tr>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
             </div>
-            <div class="stat-icon"><i class="fas fa-calculator"></i></div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-info">
-                <h3>Avg Chicks/Batch</h3>
-                <p><?= $totalBatches > 0 ? number_format($totalChicks / $totalBatches, 1) : '0' ?></p>
-            </div>
-            <div class="stat-icon"><i class="fas fa-dove"></i></div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-info">
-                <h3>Success Rate</h3>
-                <p><?= $totalEggs > 0 ? number_format((($totalBalut + $totalChicks) / $totalEggs) * 100, 1) : '0' ?>%</p>
-            </div>
-            <div class="stat-icon"><i class="fas fa-percentage"></i></div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-info">
-                <h3>Failure Rate</h3>
-                <p><?= $totalEggs > 0 ? number_format(($totalFailed / $totalEggs) * 100, 1) : '0' ?>%</p>
-            </div>
-            <div class="stat-icon"><i class="fas fa-exclamation-triangle"></i></div>
-        </div>
     </div>
 
-    <div class="chart-row">
-        <div class="chart-card">
-            <h3><i class="fas fa-chart-bar" style="color:#10b981;"></i> Balut per User (Users Only)</h3>
-            <canvas id="balutChart"></canvas>
+    <!-- ═══════════════ ANALYTICS TAB ═══════════════ -->
+    <div id="analytics-section" class="tab-section <?= $activeTab == 'analytics' ? 'active' : '' ?>">
+        <div class="stats-grid" style="margin-bottom:1rem;">
+            <div class="stat-card">
+                <div class="stat-info">
+                    <h3>Avg Balut/Batch</h3>
+                    <p><?= $totalBatches > 0 ? number_format($totalBalut / $totalBatches, 1) : '0' ?></p>
+                </div>
+                <div class="stat-icon"><i class="fas fa-calculator"></i></div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-info">
+                    <h3>Avg Chicks/Batch</h3>
+                    <p><?= $totalBatches > 0 ? number_format($totalChicks / $totalBatches, 1) : '0' ?></p>
+                </div>
+                <div class="stat-icon"><i class="fas fa-dove"></i></div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-info">
+                    <h3>Success Rate</h3>
+                    <p><?= $totalEggs > 0 ? number_format((($totalBalut + $totalChicks) / $totalEggs) * 100, 1) : '0' ?>%</p>
+                </div>
+                <div class="stat-icon"><i class="fas fa-percentage"></i></div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-info">
+                    <h3>Failure Rate</h3>
+                    <p><?= $totalEggs > 0 ? number_format(($totalFailed / $totalEggs) * 100, 1) : '0' ?>%</p>
+                </div>
+                <div class="stat-icon"><i class="fas fa-exclamation-triangle"></i></div>
+            </div>
         </div>
-        <div class="chart-card">
-            <h3><i class="fas fa-chart-line" style="color:#3b82f6;"></i> Weekly Trend (Last 7 Days)</h3>
-            <canvas id="trendChart"></canvas>
-        </div>
-    </div>
 
-    <div class="chart-row">
-        <div class="chart-card">
-            <h3><i class="fas fa-chart-pie" style="color:#f59e0b;"></i> Outcome Distribution</h3>
-            <canvas id="pieChart"></canvas>
+        <div class="chart-row">
+            <div class="chart-card">
+                <h3><i class="fas fa-chart-bar" style="color:#10b981;"></i> Balut per User (Users Only)</h3>
+                <canvas id="balutChart"></canvas>
+            </div>
+            <div class="chart-card">
+                <h3><i class="fas fa-chart-line" style="color:#3b82f6;"></i> Weekly Trend (Last 7 Days)</h3>
+                <canvas id="trendChart"></canvas>
+            </div>
         </div>
-        <div class="chart-card">
-            <h3><i class="fas fa-chart-area" style="color:#8b5cf6;"></i> Batch Status</h3>
-            <canvas id="statusChart"></canvas>
-            <p style="text-align:center;color:#64748b;font-size:0.7rem;margin-top:0.5rem;">
-                Incubating: <strong><?= $incubating ?></strong> &nbsp;|&nbsp; Complete: <strong><?= $complete ?></strong>
-            </p>
-        </div>
-    </div>
 
-    <!-- Top Performing Users Table - Scrollable -->
-    <div class="table-container">
-        <div class="table-header">
-            <h3><i class="fas fa-trophy" style="color:#f59e0b;"></i> Top Performing Users (Users Only)</h3>
+        <div class="chart-row">
+            <div class="chart-card">
+                <h3><i class="fas fa-chart-pie" style="color:#f59e0b;"></i> Outcome Distribution</h3>
+                <canvas id="pieChart"></canvas>
+            </div>
+            <div class="chart-card">
+                <h3><i class="fas fa-chart-area" style="color:#8b5cf6;"></i> Batch Status</h3>
+                <canvas id="statusChart"></canvas>
+                <p style="text-align:center;color:#64748b;font-size:0.7rem;margin-top:0.5rem;">
+                    Incubating: <strong><?= $incubating ?></strong> &nbsp;|&nbsp; Complete: <strong><?= $complete ?></strong>
+                </p>
+            </div>
         </div>
-        <div class="table-scroll-wrapper">
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>Rank</th>
-                        <th>Username</th>
-                        <th>Total Balut</th>
-                        <th>Batches</th>
-                        <th>Avg/Batch</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php
-                    $rank = 1;
-                    foreach ($topUsers as $user):
-                        $avgBalut = $user['batch_count'] > 0 ? number_format($user['total_balut'] / $user['batch_count'], 1) : 0;
-                    ?>
+
+        <!-- Top Performing Users Table - Scrollable horizontally -->
+        <div class="table-container">
+            <div class="table-header">
+                <h3><i class="fas fa-trophy" style="color:#f59e0b;"></i> Top Performing Users (Users Only)</h3>
+            </div>
+            <div class="table-scroll-wrapper">
+                <table class="data-table">
+                    <thead>
                         <tr>
-                            <td style="font-weight: bold;">#<?= $rank++ ?>
+                            <th>Rank</th>
+                            <th>Username</th>
+                            <th>Total Balut</th>
+                            <th>Batches</th>
+                            <th>Avg/Batch</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php
+                        $rank = 1;
+                        foreach ($topUsers as $user):
+                            $avgBalut = $user['batch_count'] > 0 ? number_format($user['total_balut'] / $user['batch_count'], 1) : 0;
+                        ?>
+                            <tr>
+                                <td style="font-weight: bold;">#<?= $rank++ ?>
+                                <td>
+                                    <div class="user-info">
+                                        <div class="avatar"><?= strtoupper(substr($user['username'], 0, 1)) ?></div><?= htmlspecialchars($user['username']) ?>
+                                    </div>
+            </div>
+            <td><strong><?= number_format($user['total_balut']) ?></strong>
+            <td><?= number_format($user['batch_count']) ?>
+            <td><?= $avgBalut ?>
+                </tr>
+            <?php endforeach; ?>
+            <?php if (empty($topUsers)): ?>
+                <tr>
+                    <td colspan="5" style="text-align:center">No production data available for regular users</td>
+                </tr>
+            <?php endif; ?>
+            </tbody>
+            </table>
         </div>
-    <td>
-        <div class="user-info">
-            <div class="avatar"><?= strtoupper(substr($user['username'], 0, 1)) ?></div><?= htmlspecialchars($user['username']) ?>
-        </div>
-        </div>
-    <td><strong><?= number_format($user['total_balut']) ?></strong></div>
-    <td><?= number_format($user['batch_count']) ?></div>
-    <td><?= $avgBalut ?></div>
-        </tr>
-    <?php endforeach; ?>
-    <?php if (empty($topUsers)): ?>
-        <tr>
-            <td colspan="5" style="text-align:center">No production data available for regular users</div>
-        </tr>
-    <?php endif; ?>
-    </tbody>
-    </table>
-    </div>
     </div>
 
-    <!-- User Contribution Comparison Table - Scrollable -->
+    <!-- User Contribution Comparison Table - Scrollable horizontally -->
     <div class="table-container">
         <div class="table-header">
             <h3><i class="fas fa-chart-simple"></i> User Contribution (Users Only)</h3>
@@ -1407,19 +1514,19 @@ $topUsers = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                     <div class="avatar"><?= strtoupper(substr($user['username'], 0, 1)) ?></div><?= htmlspecialchars($user['username']) ?>
                                 </div>
         </div>
-    <td><strong><?= number_format($user['total_balut']) ?></strong></div>
-    <td><?= number_format($user['total_chicks']) ?></div>
-    <td><?= number_format($user['total_failed']) ?></div>
-    <td><?= $successRate ?>%</div>
-        </tr>
-    <?php endforeach; ?>
-    <?php if (empty($userContributions)): ?>
-        <tr>
-            <td colspan="5" style="text-align:center">No contribution data available</div>
-        </tr>
-    <?php endif; ?>
-    </tbody>
-    </table>
+        <td><strong><?= number_format($user['total_balut']) ?></strong>\(c)
+        <td><?= number_format($user['total_chicks']) ?>\(c)
+        <td><?= number_format($user['total_failed']) ?>\(c)
+        <td><?= $successRate ?>%\(c)
+            </tr>
+        <?php endforeach; ?>
+        <?php if (empty($userContributions)): ?>
+            <tr>
+                <td colspan="5" style="text-align:center">No contribution data available</td>
+            </tr>
+        <?php endif; ?>
+        </tbody>
+        </table>
     </div>
     </div>
     </div>
@@ -1476,18 +1583,17 @@ $topUsers = $stmt->fetchAll(PDO::FETCH_ASSOC);
                             <?php foreach ($reportData as $row): ?>
                                 <tr>
                                     <?php foreach ($row as $value): ?>
-                                        <td><?= htmlspecialchars($value ?? '') ?>
+                                        <td><?= htmlspecialchars($value ?? '') ?></td>
+                                    <?php endforeach; ?>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                <?php else: ?>
+                    <p style="text-align:center; padding: 1.5rem; color:#94a3b8;">Select a report type and click Generate.</p>
+                <?php endif; ?>
             </div>
-        <?php endforeach; ?>
-        </tr>
-    <?php endforeach; ?>
-    </tbody>
-    </table>
-<?php else: ?>
-    <p style="text-align:center; padding: 1.5rem; color:#94a3b8;">Select a report type and click Generate.</p>
-<?php endif; ?>
         </div>
-    </div>
     </div>
     </main>
     </div>
@@ -1544,6 +1650,12 @@ $topUsers = $stmt->fetchAll(PDO::FETCH_ASSOC);
             incubating: <?= (int)$incubating ?>,
             complete: <?= (int)$complete ?>,
         };
+
+        // Export Activity Logs function
+        function exportActivityCSV() {
+            window.location.href = '?export_activity=csv';
+            showToast('Exporting activity logs...', 'success');
+        }
 
         // Mobile Menu
         function toggleMobileMenu() {
@@ -1865,6 +1977,47 @@ $topUsers = $stmt->fetchAll(PDO::FETCH_ASSOC);
             const modal = document.getElementById('userModal');
             if (event.target === modal) closeModal();
         };
+
+        // Auto-refresh activity logs every 30 seconds (real-time feel)
+        setInterval(function() {
+            if ('<?= $activeTab ?>' === 'overview') {
+                fetch(window.location.href + '?get_activity_ajax=1&nocache=' + Date.now(), {
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest'
+                        }
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.logs && data.logs.length > 0) {
+                            const tbody = document.getElementById('activityLogsBody');
+                            if (tbody) {
+                                let newHtml = '';
+                                data.logs.forEach(log => {
+                                    newHtml += `
+                                        <tr>
+                                            <td class="activity-time">
+                                                <i class="far fa-clock"></i> ${escapeHtml(log.formatted_date)}
+                                                <small>(${escapeHtml(log.time_ago)})</small>
+                                            </td>
+                                            <td>${escapeHtml(log.username)}</td>
+                                            <td>${escapeHtml(log.action)}</td>
+                                        </tr>
+                                    `;
+                                });
+                                tbody.innerHTML = newHtml;
+                            }
+                        }
+                    })
+                    .catch(err => console.log('Auto-refresh failed:', err));
+            }
+        }, 30000);
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
     </script>
 </body>
 
